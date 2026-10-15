@@ -15,6 +15,7 @@ import (
 	"go.viam.com/rdk/services/vision"
 	viz "go.viam.com/rdk/vision"
 	"go.viam.com/rdk/vision/classification"
+	"go.viam.com/rdk/vision/detection3d"
 	"go.viam.com/rdk/vision/objectdetection"
 	"go.viam.com/rdk/vision/viscapture"
 )
@@ -185,6 +186,10 @@ func (g *GlassFinder) ClassificationsFromCamera(_ context.Context, _ string, _ i
 
 func (g *GlassFinder) Classifications(_ context.Context, _ *camera.NamedImage, _ int, _ map[string]interface{}) (classification.Classifications, error) {
 	return nil, errors.New("classifications not supported")
+}
+
+func (g *GlassFinder) GetDetections3D(_ context.Context, _ string, _ map[string]interface{}) ([]*detection3d.Detection, error) {
+	return nil, errors.New("GetDetections3D not supported")
 }
 
 func (g *GlassFinder) GetProperties(_ context.Context, _ map[string]interface{}) (*vision.Properties, error) {
