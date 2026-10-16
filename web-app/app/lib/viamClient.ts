@@ -239,6 +239,17 @@ export async function clearSlotAssignment(
   });
 }
 
+export async function updatePourerOz(
+  conn: ViamConnection,
+  ingredient: string,
+  oz: number,
+): Promise<{ ingredient: string; oz: number }> {
+  if (conn.isDev) return { ingredient, oz };
+  return doCommand(conn, BARTENDER_SERVICE_NAME, {
+    update_pourer_oz: { ingredient, oz },
+  });
+}
+
 export async function updateRecipes(
   conn: ViamConnection,
   recipes: Recipe[],

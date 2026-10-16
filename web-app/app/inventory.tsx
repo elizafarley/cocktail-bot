@@ -7,6 +7,7 @@ import {
   deleteInventoryItem,
   getInventory,
   updateInventoryItem,
+  updatePourerOz,
   updateSlotAssignment,
 } from "./lib/viamClient";
 import type { Inventory } from "./lib/inventory";
@@ -65,6 +66,19 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
     try {
       await updateInventoryItem(conn, name, true);
       setNewName("");
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function savePourerOz(ingredient: string, oz: number) {
+    setBusy(true);
+    setError(null);
+    try {
+      await updatePourerOz(conn, ingredient, oz);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -139,9 +153,9 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                 <p className={styles.empty}>No ingredients yet. Add one above.</p>
               ) : (
                 <>
-                  <StockSection title="In stock" count={inStock.length} items={inStock} inStock busy={busy} onToggle={toggle} onDelete={remove} />
-                  <StockSection title="Out of stock" count={outOfStock.length} items={outOfStock} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} />
-                  <StockSection title="No slot" count={noSlot.length} items={noSlot} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} />
+                  <StockSection title="In stock" count={inStock.length} items={inStock} inStock busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
+                  <StockSection title="Out of stock" count={outOfStock.length} items={outOfStock} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
+                  <StockSection title="No slot" count={noSlot.length} items={noSlot} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
                 </>
               )}
             </>
@@ -149,6 +163,47 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
         </main>
       </div>
     </>
+  );
+}
+
+function PourerOzInput({
+  ingredient,
+  initial,
+  busy,
+  onSave,
+}: {
+  ingredient: string;
+  initial: number | undefined;
+  busy: boolean;
+  onSave: (ingredient: string, oz: number) => void;
+}) {
+  const [value, setValue] = useState<string>(initial != null ? String(initial) : "");
+
+  function commit() {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) {
+      setValue(initial != null ? String(initial) : "");
+      return;
+    }
+    if (n === initial) return;
+    onSave(ingredient, n);
+  }
+
+  return (
+    <input
+      type="number"
+      className={styles.ozInput}
+      value={value}
+      min={0}
+      step={0.5}
+      placeholder="oz"
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      disabled={busy}
+    />
   );
 }
 
@@ -203,14 +258,16 @@ function StockSection({
   busy,
   onToggle,
   onDelete,
+  onPourerOz,
 }: {
   title: string;
   count: number;
-  items: [string, { in_stock: boolean; slot?: string }][];
+  items: [string, { in_stock: boolean; slot?: string; pourer_oz?: number }][];
   inStock: boolean;
   busy: boolean;
   onToggle: (name: string, next: boolean) => void;
   onDelete: (name: string) => void;
+  onPourerOz: (name: string, oz: number) => void;
 }) {
   if (items.length === 0) return null;
   return (
@@ -229,6 +286,7 @@ function StockSection({
             />
             <span className={styles.name}>{titleCase(name)}</span>
             <span className={styles.slot}>{stock.slot ?? "No slot"}</span>
+            <PourerOzInput key={`${name}:${stock.pourer_oz ?? ""}`} ingredient={name} initial={stock.pourer_oz} busy={busy} onSave={onPourerOz} />
             <div className={styles.rowBtns}>
               <button
                 type="button"

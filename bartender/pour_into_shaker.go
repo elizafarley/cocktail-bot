@@ -38,9 +38,12 @@ func (b *bartender) pourIntoShaker(ctx context.Context, ingredient string, oz fl
 	if err != nil {
 		return err
 	}
-	pourerOz, ok := b.cfg.BottlePourerOz[ingredient]
+	if b.dataStore == nil {
+		return errDataStoreNotConfigured
+	}
+	pourerOz, ok := b.dataStore.PourerOz()[ingredient]
 	if !ok {
-		return fmt.Errorf("no bottle_pourer_oz configured for ingredient %q", ingredient)
+		return fmt.Errorf("no pourer oz configured for ingredient %q", ingredient)
 	}
 	pours, err := pourCount(oz, pourerOz)
 	if err != nil {

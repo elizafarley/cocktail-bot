@@ -110,7 +110,7 @@
 }
 .row {
   display: grid;
-  grid-template-columns: 24px 1fr auto auto;
+  grid-template-columns: 24px 1fr auto auto auto;
   gap: 16px;
   align-items: center;
   min-height: 56px;
@@ -128,6 +128,21 @@
   font-size: 13px;
   color: var(--smoke);
   font-variant-numeric: tabular-nums;
+}
+.ozInput {
+  width: 72px;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.ozInput:disabled {
+  opacity: 0.6;
 }
 .dot {
   width: 10px;

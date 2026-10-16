@@ -40,15 +40,14 @@ type Config struct {
 	GlassSearchPanDeg   []float64 `json:"glass_search_pan_deg,omitempty"`
 	GlassSearchSettleMs int       `json:"glass_search_settle_ms,omitempty"`
 	// Detections whose centroids are closer than this in x, y count as one glass (default 50).
-	GlassMinSeparationMM     float64            `json:"glass_min_separation_mm,omitempty"`
-	BottlePourerOz           map[string]float64 `json:"bottle_pourer_oz,omitempty"`
-	DataDir                  string             `json:"data_dir,omitempty"`
-	PickupObstacles          map[string]string  `json:"pickup_obstacles,omitempty"`
-	RecipeDefaults           *RecipeDefaults    `json:"recipe_defaults,omitempty"`
-	PourIntoShakerDwellMs    int                `json:"pour_into_shaker_dwell_ms,omitempty"`
-	MixerProtectorObstacle   string             `json:"mixer_protector_obstacle,omitempty"`
-	BottlesProtectorObstacle string             `json:"bottles_protector_obstacle,omitempty"`
-	SlotNames                []string           `json:"slot_names,omitempty"`
+	GlassMinSeparationMM     float64           `json:"glass_min_separation_mm,omitempty"`
+	DataDir                  string            `json:"data_dir,omitempty"`
+	PickupObstacles          map[string]string `json:"pickup_obstacles,omitempty"`
+	RecipeDefaults           *RecipeDefaults   `json:"recipe_defaults,omitempty"`
+	PourIntoShakerDwellMs    int               `json:"pour_into_shaker_dwell_ms,omitempty"`
+	MixerProtectorObstacle   string            `json:"mixer_protector_obstacle,omitempty"`
+	BottlesProtectorObstacle string            `json:"bottles_protector_obstacle,omitempty"`
+	SlotNames                []string          `json:"slot_names,omitempty"`
 	// Incoming webhook URL for order outcome alerts; empty disables.
 	SlackWebhookURL string `json:"slack_webhook_url,omitempty"`
 	// Viam machine id; when set, failure alerts include a deep-link to app.viam.com machine logs.
@@ -108,11 +107,6 @@ func (c *Config) Validate(path string) ([]string, []string, error) {
 	for _, l := range c.GlassSearchLowerMM {
 		if l < 0 {
 			return nil, nil, errors.New(path + ": glass_search_lower_mm entries must be >= 0 (mm below glass-look)")
-		}
-	}
-	for name, oz := range c.BottlePourerOz {
-		if oz <= 0 {
-			return nil, nil, fmt.Errorf("%s: bottle_pourer_oz[%q] must be > 0", path, name)
 		}
 	}
 	switcherSet := make(map[string]struct{}, len(c.PoseSwitcherNames))

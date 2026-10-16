@@ -83,10 +83,13 @@ func (b *bartender) DoCommand(ctx context.Context, cmd map[string]any) (map[stri
 	if raw, ok := cmd["clear_slot_assignment"]; ok {
 		return b.handleClearSlotAssignment(raw)
 	}
+	if raw, ok := cmd["update_pourer_oz"]; ok {
+		return b.handleUpdatePourerOz(raw)
+	}
 	if raw, ok := cmd["make_cocktail"]; ok {
 		return b.handleMakeCocktail(ctx, raw)
 	}
-	return nil, fmt.Errorf("unknown command, supported: prepare_order, get_queue, get_status, cancel, execute_action, pickup_pour_return, dispense_ice, pour_into_glasses, find_glass, find_and_pour, find_and_pour_from_shaker, mix, pour_from_shaker, pour_into_shaker, strain_shaker, rotate_shakers, get_recipes, get_inventory, get_bottles, update_inventory_item, delete_inventory_item, update_recipes, update_slot_assignment, clear_slot_assignment, make_cocktail")
+	return nil, fmt.Errorf("unknown command, supported: prepare_order, get_queue, get_status, cancel, execute_action, pickup_pour_return, dispense_ice, pour_into_glasses, find_glass, find_and_pour, find_and_pour_from_shaker, mix, pour_from_shaker, pour_into_shaker, strain_shaker, rotate_shakers, get_recipes, get_inventory, get_bottles, update_inventory_item, delete_inventory_item, update_recipes, update_slot_assignment, clear_slot_assignment, update_pourer_oz, make_cocktail")
 }
 
 func (b *bartender) handlePrepareOrder(raw any) (map[string]any, error) {
@@ -535,9 +538,15 @@ func (b *bartender) handleGetInventory() (map[string]any, error) {
 	}
 	raw := b.dataStore.GetInventory()
 	assignments := b.dataStore.SlotAssignments()
+	pourerOz := b.dataStore.PourerOz()
 	ingredientToSlot := make(map[string]string, len(assignments))
 	for slot, ingredient := range assignments {
 		ingredientToSlot[ingredient] = slot
+	}
+	addPourerOz := func(entry map[string]any, ingredient string) {
+		if oz, ok := pourerOz[ingredient]; ok {
+			entry["pourer_oz"] = oz
+		}
 	}
 	ingredients := make(map[string]any, len(raw.Ingredients)+len(ingredientToSlot))
 	for ingredient, stock := range raw.Ingredients {
@@ -546,13 +555,16 @@ func (b *bartender) handleGetInventory() (map[string]any, error) {
 		if hasSlot {
 			entry["slot"] = slot
 		}
+		addPourerOz(entry, ingredient)
 		ingredients[ingredient] = entry
 	}
 	for ingredient, slot := range ingredientToSlot {
 		if _, seen := ingredients[ingredient]; seen {
 			continue
 		}
-		ingredients[ingredient] = map[string]any{"in_stock": false, "slot": slot}
+		entry := map[string]any{"in_stock": false, "slot": slot}
+		addPourerOz(entry, ingredient)
+		ingredients[ingredient] = entry
 	}
 	slots := make([]any, 0, len(b.cfg.SlotNames))
 	for _, slot := range b.cfg.SlotNames {
@@ -588,6 +600,28 @@ func (b *bartender) handleUpdateSlotAssignment(raw any) (map[string]any, error) 
 		return nil, err
 	}
 	return map[string]any{"slot": slot, "ingredient": ingredient}, nil
+}
+
+func (b *bartender) handleUpdatePourerOz(raw any) (map[string]any, error) {
+	if b.dataStore == nil {
+		return nil, errDataStoreNotConfigured
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("update_pourer_oz: expected object with 'ingredient' and 'oz', got %T", raw)
+	}
+	ingredient, _ := m["ingredient"].(string)
+	oz, _ := m["oz"].(float64)
+	if ingredient == "" {
+		return nil, errors.New("update_pourer_oz: 'ingredient' is required")
+	}
+	if oz <= 0 {
+		return nil, errors.New("update_pourer_oz: 'oz' must be > 0")
+	}
+	if err := b.dataStore.UpdatePourerOz(ingredient, oz); err != nil {
+		return nil, err
+	}
+	return map[string]any{"ingredient": ingredient, "oz": oz}, nil
 }
 
 func (b *bartender) handleClearSlotAssignment(raw any) (map[string]any, error) {
