@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ViamConnection } from "./lib/viamClient";
-import { getInventory, updateInventoryItem, deleteInventoryItem } from "./lib/viamClient";
+import {
+  clearSlotAssignment,
+  deleteInventoryItem,
+  getInventory,
+  updateInventoryItem,
+  updateSlotAssignment,
+} from "./lib/viamClient";
 import type { Inventory } from "./lib/inventory";
 import { Nav } from "./nav";
 import { titleCase } from "./lib/display";
@@ -67,10 +73,29 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
     }
   }
 
+  async function assignSlot(slot: string, ingredient: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      if (ingredient === "") {
+        await clearSlotAssignment(conn, slot);
+      } else {
+        await updateSlotAssignment(conn, slot, ingredient);
+      }
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const items = inventory ? Object.entries(inventory.ingredients).sort(([a], [b]) => a.localeCompare(b)) : [];
   const inStock = items.filter(([, s]) => s.in_stock);
   const outOfStock = items.filter(([, s]) => !s.in_stock && s.slot);
   const noSlot = items.filter(([, s]) => !s.slot);
+  const slots = inventory?.slots ?? [];
+  const ingredientNames = items.map(([name]) => name);
 
   return (
     <>
@@ -105,18 +130,68 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
 
           {!inventory ? (
             <p className={styles.empty}>Loading…</p>
-          ) : items.length === 0 ? (
-            <p className={styles.empty}>No ingredients yet. Add one above.</p>
           ) : (
             <>
-              <StockSection title="In stock" count={inStock.length} items={inStock} inStock busy={busy} onToggle={toggle} onDelete={remove} />
-              <StockSection title="Out of stock" count={outOfStock.length} items={outOfStock} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} />
-              <StockSection title="No slot" count={noSlot.length} items={noSlot} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} />
+              {slots.length > 0 && (
+                <SlotsSection slots={slots} ingredientNames={ingredientNames} busy={busy} onAssign={assignSlot} />
+              )}
+              {items.length === 0 ? (
+                <p className={styles.empty}>No ingredients yet. Add one above.</p>
+              ) : (
+                <>
+                  <StockSection title="In stock" count={inStock.length} items={inStock} inStock busy={busy} onToggle={toggle} onDelete={remove} />
+                  <StockSection title="Out of stock" count={outOfStock.length} items={outOfStock} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} />
+                  <StockSection title="No slot" count={noSlot.length} items={noSlot} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} />
+                </>
+              )}
             </>
           )}
         </main>
       </div>
     </>
+  );
+}
+
+function SlotsSection({
+  slots,
+  ingredientNames,
+  busy,
+  onAssign,
+}: {
+  slots: { id: string; ingredient?: string }[];
+  ingredientNames: string[];
+  busy: boolean;
+  onAssign: (slot: string, ingredient: string) => void;
+}) {
+  return (
+    <section className={styles.section}>
+      <h2>
+        Slots
+        <span className={styles.sectionCount}>{slots.length}</span>
+      </h2>
+      <div className={styles.rows}>
+        {slots.map((slot) => (
+          <div key={slot.id} className={styles.row}>
+            <span className={styles.dot} style={{ background: slot.ingredient ? "var(--ok)" : "var(--smoke)" }} aria-hidden />
+            <span className={styles.name}>{slot.id}</span>
+            <select
+              className={styles.input}
+              value={slot.ingredient ?? ""}
+              onChange={(e) => onAssign(slot.id, e.target.value)}
+              disabled={busy}
+            >
+              <option value="">— empty —</option>
+              {ingredientNames.map((n) => (
+                <option key={n} value={n}>
+                  {titleCase(n)}
+                </option>
+              ))}
+            </select>
+            <span />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -160,7 +235,7 @@ function StockSection({
                 className={styles.btn}
                 onClick={() => onToggle(name, !inStock)}
                 disabled={busy || !stock.slot}
-                title={stock.slot ? "" : "Assign a slot in bartender config before marking in stock"}
+                title={stock.slot ? "" : "Assign this ingredient to a slot above before marking in stock"}
               >
                 Mark {inStock ? "out of stock" : "in stock"}
               </button>

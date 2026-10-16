@@ -77,10 +77,16 @@ func (b *bartender) DoCommand(ctx context.Context, cmd map[string]any) (map[stri
 	if raw, ok := cmd["update_recipes"]; ok {
 		return b.handleUpdateRecipes(raw)
 	}
+	if raw, ok := cmd["update_slot_assignment"]; ok {
+		return b.handleUpdateSlotAssignment(raw)
+	}
+	if raw, ok := cmd["clear_slot_assignment"]; ok {
+		return b.handleClearSlotAssignment(raw)
+	}
 	if raw, ok := cmd["make_cocktail"]; ok {
 		return b.handleMakeCocktail(ctx, raw)
 	}
-	return nil, fmt.Errorf("unknown command, supported: prepare_order, get_queue, get_status, cancel, execute_action, pickup_pour_return, dispense_ice, pour_into_glasses, find_glass, find_and_pour, find_and_pour_from_shaker, mix, pour_from_shaker, pour_into_shaker, strain_shaker, rotate_shakers, get_recipes, get_inventory, get_bottles, update_inventory_item, delete_inventory_item, update_recipes, make_cocktail")
+	return nil, fmt.Errorf("unknown command, supported: prepare_order, get_queue, get_status, cancel, execute_action, pickup_pour_return, dispense_ice, pour_into_glasses, find_glass, find_and_pour, find_and_pour_from_shaker, mix, pour_from_shaker, pour_into_shaker, strain_shaker, rotate_shakers, get_recipes, get_inventory, get_bottles, update_inventory_item, delete_inventory_item, update_recipes, update_slot_assignment, clear_slot_assignment, make_cocktail")
 }
 
 func (b *bartender) handlePrepareOrder(raw any) (map[string]any, error) {
@@ -512,8 +518,12 @@ func (b *bartender) handleGetRecipes() (map[string]any, error) {
 }
 
 func (b *bartender) handleGetBottles() (map[string]any, error) {
-	ingredients := make([]any, 0, len(b.cfg.SlotAssignments))
-	for _, ingredient := range b.cfg.SlotAssignments {
+	if b.dataStore == nil {
+		return nil, errDataStoreNotConfigured
+	}
+	assignments := b.dataStore.SlotAssignments()
+	ingredients := make([]any, 0, len(assignments))
+	for _, ingredient := range assignments {
 		ingredients = append(ingredients, ingredient)
 	}
 	return map[string]any{"bottles": ingredients}, nil
@@ -524,8 +534,9 @@ func (b *bartender) handleGetInventory() (map[string]any, error) {
 		return nil, errDataStoreNotConfigured
 	}
 	raw := b.dataStore.GetInventory()
-	ingredientToSlot := make(map[string]string, len(b.cfg.SlotAssignments))
-	for slot, ingredient := range b.cfg.SlotAssignments {
+	assignments := b.dataStore.SlotAssignments()
+	ingredientToSlot := make(map[string]string, len(assignments))
+	for slot, ingredient := range assignments {
 		ingredientToSlot[ingredient] = slot
 	}
 	ingredients := make(map[string]any, len(raw.Ingredients)+len(ingredientToSlot))
@@ -543,7 +554,67 @@ func (b *bartender) handleGetInventory() (map[string]any, error) {
 		}
 		ingredients[ingredient] = map[string]any{"in_stock": false, "slot": slot}
 	}
-	return map[string]any{"inventory": map[string]any{"ingredients": ingredients}}, nil
+	slots := make([]any, 0, len(b.cfg.SlotNames))
+	for _, slot := range b.cfg.SlotNames {
+		entry := map[string]any{"id": slot}
+		if ingredient, ok := assignments[slot]; ok {
+			entry["ingredient"] = ingredient
+		}
+		slots = append(slots, entry)
+	}
+	return map[string]any{"inventory": map[string]any{"ingredients": ingredients, "slots": slots}}, nil
+}
+
+func (b *bartender) handleUpdateSlotAssignment(raw any) (map[string]any, error) {
+	if b.dataStore == nil {
+		return nil, errDataStoreNotConfigured
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("update_slot_assignment: expected object with 'slot' and 'ingredient', got %T", raw)
+	}
+	slot, _ := m["slot"].(string)
+	ingredient, _ := m["ingredient"].(string)
+	if slot == "" {
+		return nil, errors.New("update_slot_assignment: 'slot' is required")
+	}
+	if ingredient == "" {
+		return nil, errors.New("update_slot_assignment: 'ingredient' is required; use clear_slot_assignment to empty a slot")
+	}
+	if !slotKnown(b.cfg.SlotNames, slot) {
+		return nil, fmt.Errorf("update_slot_assignment: slot %q is not in slot_names", slot)
+	}
+	if err := b.dataStore.UpdateSlotAssignment(slot, ingredient); err != nil {
+		return nil, err
+	}
+	return map[string]any{"slot": slot, "ingredient": ingredient}, nil
+}
+
+func (b *bartender) handleClearSlotAssignment(raw any) (map[string]any, error) {
+	if b.dataStore == nil {
+		return nil, errDataStoreNotConfigured
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("clear_slot_assignment: expected object with 'slot', got %T", raw)
+	}
+	slot, _ := m["slot"].(string)
+	if slot == "" {
+		return nil, errors.New("clear_slot_assignment: 'slot' is required")
+	}
+	if err := b.dataStore.ClearSlotAssignment(slot); err != nil {
+		return nil, err
+	}
+	return map[string]any{"slot": slot}, nil
+}
+
+func slotKnown(slots []string, want string) bool {
+	for _, s := range slots {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *bartender) handleUpdateInventoryItem(raw any) (map[string]any, error) {
