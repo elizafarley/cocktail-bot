@@ -17,14 +17,18 @@ func (b *bartender) pourIntoShakerDwell() time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
-func (b *bartender) pourIntoShaker(ctx context.Context, bottleSwitchName string, oz float64) error {
-	bottleSw, err := b.findSwitch(bottleSwitchName)
+func (b *bartender) pourIntoShaker(ctx context.Context, ingredient string, oz float64) error {
+	slot, err := b.cfg.slotForIngredient(ingredient)
 	if err != nil {
 		return err
 	}
-	pourerOz, ok := b.cfg.BottlePourerOz[bottleSwitchName]
+	bottleSw, err := b.findSwitch(slot)
+	if err != nil {
+		return err
+	}
+	pourerOz, ok := b.cfg.BottlePourerOz[slot]
 	if !ok {
-		return fmt.Errorf("no bottle_pourer_oz configured for bottle %q", bottleSwitchName)
+		return fmt.Errorf("no bottle_pourer_oz configured for slot %q (ingredient %q)", slot, ingredient)
 	}
 	pours, err := pourCount(oz, pourerOz)
 	if err != nil {
