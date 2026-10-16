@@ -10,6 +10,7 @@ export const DRINK_IMAGE_SLUGS = [
   "aperol-spritz",
   "espresso-martini",
   "gin-and-tonic",
+  "lemon-drop",
   "margarita",
   "martini",
   "mocktail",
