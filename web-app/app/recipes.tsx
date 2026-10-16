@@ -214,7 +214,9 @@ function RecipeEditor({
       alert("Recipe id is required");
       return;
     }
-    onSave({ id: effectiveId, name: trimmedName, pours, on_menu: onMenu, image: image || undefined });
+    const next: Recipe = { id: effectiveId, name: trimmedName, pours, on_menu: onMenu };
+    if (image) next.image = image;
+    onSave(next);
   }
 
   return (
