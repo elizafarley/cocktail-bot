@@ -7,6 +7,7 @@ export interface Recipe {
 }
 
 export const DRINK_IMAGE_SLUGS = [
+  "amaretto-sour",
   "aperol-spritz",
   "espresso-martini",
   "gin-and-tonic",
