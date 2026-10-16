@@ -35,6 +35,7 @@ const (
 	recipesFileName         = "recipes.json"
 	inventoryFileName       = "inventory.json"
 	slotAssignmentsFileName = "slot_assignments.json"
+	pourerOzFileName        = "pourer_oz.json"
 )
 
 var errDataStoreNotConfigured = errors.New("data_dir not configured; recipes and inventory DoCommands unavailable")
@@ -45,6 +46,7 @@ type dataStore struct {
 	recipes         []Recipe
 	inventory       Inventory
 	slotAssignments map[string]string
+	pourerOz        map[string]float64
 }
 
 func newDataStore(dir string) (*dataStore, error) {
@@ -58,6 +60,7 @@ func newDataStore(dir string) (*dataStore, error) {
 		dir:             dir,
 		inventory:       Inventory{Ingredients: map[string]IngredientStock{}},
 		slotAssignments: map[string]string{},
+		pourerOz:        map[string]float64{},
 	}
 	if err := ds.loadRecipes(); err != nil {
 		return nil, err
@@ -66,6 +69,9 @@ func newDataStore(dir string) (*dataStore, error) {
 		return nil, err
 	}
 	if err := ds.loadSlotAssignments(); err != nil {
+		return nil, err
+	}
+	if err := ds.loadPourerOz(); err != nil {
 		return nil, err
 	}
 	return ds, nil
@@ -236,6 +242,65 @@ func (ds *dataStore) persistSlotAssignmentsLocked() error {
 		return fmt.Errorf("marshal slot_assignments: %w", err)
 	}
 	path := filepath.Join(ds.dir, slotAssignmentsFileName)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", tmp, path, err)
+	}
+	return nil
+}
+
+func (ds *dataStore) loadPourerOz() error {
+	path := filepath.Join(ds.dir, pourerOzFileName)
+	bytes, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	var p map[string]float64
+	if err := json.Unmarshal(bytes, &p); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	if p == nil {
+		p = map[string]float64{}
+	}
+	ds.pourerOz = p
+	return nil
+}
+
+func (ds *dataStore) PourerOz() map[string]float64 {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	out := make(map[string]float64, len(ds.pourerOz))
+	for k, v := range ds.pourerOz {
+		out[k] = v
+	}
+	return out
+}
+
+func (ds *dataStore) UpdatePourerOz(ingredient string, oz float64) error {
+	if ingredient == "" {
+		return errors.New("ingredient is required")
+	}
+	if oz <= 0 {
+		return fmt.Errorf("oz must be > 0, got %v", oz)
+	}
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.pourerOz[ingredient] = oz
+	return ds.persistPourerOzLocked()
+}
+
+func (ds *dataStore) persistPourerOzLocked() error {
+	bytes, err := json.MarshalIndent(ds.pourerOz, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal pourer_oz: %w", err)
+	}
+	path := filepath.Join(ds.dir, pourerOzFileName)
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", tmp, err)
