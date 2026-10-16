@@ -3,11 +3,17 @@ import { recipeIngredients } from "./recipes";
 
 export interface Inventory {
   ingredients: Record<string, IngredientStock>;
+  slots?: Slot[];
 }
 
 export interface IngredientStock {
   in_stock: boolean;
   slot?: string;
+}
+
+export interface Slot {
+  id: string;
+  ingredient?: string;
 }
 
 export function isAvailable(recipe: Recipe, inventory: Inventory): boolean {

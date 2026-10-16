@@ -17,8 +17,20 @@ func (b *bartender) pourIntoShakerDwell() time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
+func (b *bartender) slotForIngredient(ingredient string) (string, error) {
+	if b.dataStore == nil {
+		return "", errDataStoreNotConfigured
+	}
+	for slot, ing := range b.dataStore.SlotAssignments() {
+		if ing == ingredient {
+			return slot, nil
+		}
+	}
+	return "", fmt.Errorf("ingredient %q is not assigned to any slot", ingredient)
+}
+
 func (b *bartender) pourIntoShaker(ctx context.Context, ingredient string, oz float64) error {
-	slot, err := b.cfg.slotForIngredient(ingredient)
+	slot, err := b.slotForIngredient(ingredient)
 	if err != nil {
 		return err
 	}
@@ -26,9 +38,9 @@ func (b *bartender) pourIntoShaker(ctx context.Context, ingredient string, oz fl
 	if err != nil {
 		return err
 	}
-	pourerOz, ok := b.cfg.BottlePourerOz[slot]
+	pourerOz, ok := b.cfg.BottlePourerOz[ingredient]
 	if !ok {
-		return fmt.Errorf("no bottle_pourer_oz configured for slot %q (ingredient %q)", slot, ingredient)
+		return fmt.Errorf("no bottle_pourer_oz configured for ingredient %q", ingredient)
 	}
 	pours, err := pourCount(oz, pourerOz)
 	if err != nil {

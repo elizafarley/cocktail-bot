@@ -32,17 +32,19 @@ type IngredientStock struct {
 }
 
 const (
-	recipesFileName   = "recipes.json"
-	inventoryFileName = "inventory.json"
+	recipesFileName         = "recipes.json"
+	inventoryFileName       = "inventory.json"
+	slotAssignmentsFileName = "slot_assignments.json"
 )
 
 var errDataStoreNotConfigured = errors.New("data_dir not configured; recipes and inventory DoCommands unavailable")
 
 type dataStore struct {
-	mu        sync.RWMutex
-	dir       string
-	recipes   []Recipe
-	inventory Inventory
+	mu              sync.RWMutex
+	dir             string
+	recipes         []Recipe
+	inventory       Inventory
+	slotAssignments map[string]string
 }
 
 func newDataStore(dir string) (*dataStore, error) {
@@ -52,11 +54,18 @@ func newDataStore(dir string) (*dataStore, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create data_dir %q: %w", dir, err)
 	}
-	ds := &dataStore{dir: dir, inventory: Inventory{Ingredients: map[string]IngredientStock{}}}
+	ds := &dataStore{
+		dir:             dir,
+		inventory:       Inventory{Ingredients: map[string]IngredientStock{}},
+		slotAssignments: map[string]string{},
+	}
 	if err := ds.loadRecipes(); err != nil {
 		return nil, err
 	}
 	if err := ds.loadInventory(); err != nil {
+		return nil, err
+	}
+	if err := ds.loadSlotAssignments(); err != nil {
 		return nil, err
 	}
 	return ds, nil
@@ -161,6 +170,80 @@ func (ds *dataStore) DeleteInventoryItem(ingredient string) error {
 	defer ds.mu.Unlock()
 	delete(ds.inventory.Ingredients, ingredient)
 	return ds.persistInventoryLocked()
+}
+
+func (ds *dataStore) loadSlotAssignments() error {
+	path := filepath.Join(ds.dir, slotAssignmentsFileName)
+	bytes, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	var sa map[string]string
+	if err := json.Unmarshal(bytes, &sa); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	if sa == nil {
+		sa = map[string]string{}
+	}
+	ds.slotAssignments = sa
+	return nil
+}
+
+func (ds *dataStore) SlotAssignments() map[string]string {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	out := make(map[string]string, len(ds.slotAssignments))
+	for k, v := range ds.slotAssignments {
+		out[k] = v
+	}
+	return out
+}
+
+func (ds *dataStore) UpdateSlotAssignment(slot, ingredient string) error {
+	if slot == "" {
+		return errors.New("slot is required")
+	}
+	if ingredient == "" {
+		return errors.New("ingredient is required; call clear_slot_assignment to empty a slot")
+	}
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	for existing, ing := range ds.slotAssignments {
+		if ing == ingredient && existing != slot {
+			return fmt.Errorf("ingredient %q is already assigned to slot %q", ingredient, existing)
+		}
+	}
+	ds.slotAssignments[slot] = ingredient
+	return ds.persistSlotAssignmentsLocked()
+}
+
+func (ds *dataStore) ClearSlotAssignment(slot string) error {
+	if slot == "" {
+		return errors.New("slot is required")
+	}
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	delete(ds.slotAssignments, slot)
+	return ds.persistSlotAssignmentsLocked()
+}
+
+func (ds *dataStore) persistSlotAssignmentsLocked() error {
+	bytes, err := json.MarshalIndent(ds.slotAssignments, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal slot_assignments: %w", err)
+	}
+	path := filepath.Join(ds.dir, slotAssignmentsFileName)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", tmp, path, err)
+	}
+	return nil
 }
 
 func (ds *dataStore) persistInventoryLocked() error {

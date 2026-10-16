@@ -218,6 +218,27 @@ export async function deleteInventoryItem(
   });
 }
 
+export async function updateSlotAssignment(
+  conn: ViamConnection,
+  slot: string,
+  ingredient: string,
+): Promise<{ slot: string; ingredient: string }> {
+  if (conn.isDev) return { slot, ingredient };
+  return doCommand(conn, BARTENDER_SERVICE_NAME, {
+    update_slot_assignment: { slot, ingredient },
+  });
+}
+
+export async function clearSlotAssignment(
+  conn: ViamConnection,
+  slot: string,
+): Promise<{ slot: string }> {
+  if (conn.isDev) return { slot };
+  return doCommand(conn, BARTENDER_SERVICE_NAME, {
+    clear_slot_assignment: { slot },
+  });
+}
+
 export async function updateRecipes(
   conn: ViamConnection,
   recipes: Recipe[],

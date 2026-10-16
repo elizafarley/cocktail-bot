@@ -48,7 +48,7 @@ type Config struct {
 	PourIntoShakerDwellMs    int                `json:"pour_into_shaker_dwell_ms,omitempty"`
 	MixerProtectorObstacle   string             `json:"mixer_protector_obstacle,omitempty"`
 	BottlesProtectorObstacle string             `json:"bottles_protector_obstacle,omitempty"`
-	SlotAssignments          map[string]string  `json:"slot_assignments,omitempty"`
+	SlotNames                []string           `json:"slot_names,omitempty"`
 	// Incoming webhook URL for order outcome alerts; empty disables.
 	SlackWebhookURL string `json:"slack_webhook_url,omitempty"`
 	// Viam machine id; when set, failure alerts include a deep-link to app.viam.com machine logs.
@@ -119,18 +119,18 @@ func (c *Config) Validate(path string) ([]string, []string, error) {
 	for _, n := range c.PoseSwitcherNames {
 		switcherSet[n] = struct{}{}
 	}
-	seenIngredient := make(map[string]string, len(c.SlotAssignments))
-	for slot, ingredient := range c.SlotAssignments {
+	seenSlot := make(map[string]struct{}, len(c.SlotNames))
+	for _, slot := range c.SlotNames {
+		if slot == "" {
+			return nil, nil, errors.New(path + ": slot_names contains an empty entry")
+		}
+		if _, dup := seenSlot[slot]; dup {
+			return nil, nil, fmt.Errorf("%s: slot_names has duplicate %q", path, slot)
+		}
 		if _, ok := switcherSet[slot]; !ok {
-			return nil, nil, fmt.Errorf("%s: slot_assignments[%q] slot id is not in pose_switcher_names", path, slot)
+			return nil, nil, fmt.Errorf("%s: slot_names[%q] is not in pose_switcher_names", path, slot)
 		}
-		if ingredient == "" {
-			return nil, nil, fmt.Errorf("%s: slot_assignments[%q] ingredient must not be empty (omit the key to leave the slot empty)", path, slot)
-		}
-		if other, dup := seenIngredient[ingredient]; dup {
-			return nil, nil, fmt.Errorf("%s: slot_assignments has %q assigned to both %q and %q", path, ingredient, other, slot)
-		}
-		seenIngredient[ingredient] = slot
+		seenSlot[slot] = struct{}{}
 	}
 	deps := []string{
 		framesystem.PublicServiceName.String(),
@@ -208,13 +208,4 @@ func (c *Config) glassSearchSettleMs() int {
 		return defaultGlassSearchSettleMs
 	}
 	return c.GlassSearchSettleMs
-}
-
-func (c *Config) slotForIngredient(ingredient string) (string, error) {
-	for slot, ing := range c.SlotAssignments {
-		if ing == ingredient {
-			return slot, nil
-		}
-	}
-	return "", fmt.Errorf("ingredient %q is not assigned to any slot", ingredient)
 }
