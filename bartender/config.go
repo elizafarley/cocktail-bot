@@ -48,6 +48,7 @@ type Config struct {
 	PourIntoShakerDwellMs    int                `json:"pour_into_shaker_dwell_ms,omitempty"`
 	MixerProtectorObstacle   string             `json:"mixer_protector_obstacle,omitempty"`
 	BottlesProtectorObstacle string             `json:"bottles_protector_obstacle,omitempty"`
+	SlotAssignments          map[string]string  `json:"slot_assignments,omitempty"`
 	// Incoming webhook URL for order outcome alerts; empty disables.
 	SlackWebhookURL string `json:"slack_webhook_url,omitempty"`
 	// Viam machine id; when set, failure alerts include a deep-link to app.viam.com machine logs.
@@ -113,6 +114,23 @@ func (c *Config) Validate(path string) ([]string, []string, error) {
 		if oz <= 0 {
 			return nil, nil, fmt.Errorf("%s: bottle_pourer_oz[%q] must be > 0", path, name)
 		}
+	}
+	switcherSet := make(map[string]struct{}, len(c.PoseSwitcherNames))
+	for _, n := range c.PoseSwitcherNames {
+		switcherSet[n] = struct{}{}
+	}
+	seenIngredient := make(map[string]string, len(c.SlotAssignments))
+	for slot, ingredient := range c.SlotAssignments {
+		if _, ok := switcherSet[slot]; !ok {
+			return nil, nil, fmt.Errorf("%s: slot_assignments[%q] slot id is not in pose_switcher_names", path, slot)
+		}
+		if ingredient == "" {
+			return nil, nil, fmt.Errorf("%s: slot_assignments[%q] ingredient must not be empty (omit the key to leave the slot empty)", path, slot)
+		}
+		if other, dup := seenIngredient[ingredient]; dup {
+			return nil, nil, fmt.Errorf("%s: slot_assignments has %q assigned to both %q and %q", path, ingredient, other, slot)
+		}
+		seenIngredient[ingredient] = slot
 	}
 	deps := []string{
 		framesystem.PublicServiceName.String(),
@@ -190,4 +208,13 @@ func (c *Config) glassSearchSettleMs() int {
 		return defaultGlassSearchSettleMs
 	}
 	return c.GlassSearchSettleMs
+}
+
+func (c *Config) slotForIngredient(ingredient string) (string, error) {
+	for slot, ing := range c.SlotAssignments {
+		if ing == ingredient {
+			return slot, nil
+		}
+	}
+	return "", fmt.Errorf("ingredient %q is not assigned to any slot", ingredient)
 }

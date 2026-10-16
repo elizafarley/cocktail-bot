@@ -512,18 +512,38 @@ func (b *bartender) handleGetRecipes() (map[string]any, error) {
 }
 
 func (b *bartender) handleGetBottles() (map[string]any, error) {
-	names := make([]any, 0, len(b.cfg.BottlePourerOz))
-	for name := range b.cfg.BottlePourerOz {
-		names = append(names, name)
+	ingredients := make([]any, 0, len(b.cfg.SlotAssignments))
+	for _, ingredient := range b.cfg.SlotAssignments {
+		ingredients = append(ingredients, ingredient)
 	}
-	return map[string]any{"bottles": names}, nil
+	return map[string]any{"bottles": ingredients}, nil
 }
 
 func (b *bartender) handleGetInventory() (map[string]any, error) {
 	if b.dataStore == nil {
 		return nil, errDataStoreNotConfigured
 	}
-	return map[string]any{"inventory": b.dataStore.GetInventory()}, nil
+	raw := b.dataStore.GetInventory()
+	ingredientToSlot := make(map[string]string, len(b.cfg.SlotAssignments))
+	for slot, ingredient := range b.cfg.SlotAssignments {
+		ingredientToSlot[ingredient] = slot
+	}
+	ingredients := make(map[string]any, len(raw.Ingredients)+len(ingredientToSlot))
+	for ingredient, stock := range raw.Ingredients {
+		slot, hasSlot := ingredientToSlot[ingredient]
+		entry := map[string]any{"in_stock": hasSlot && stock.InStock}
+		if hasSlot {
+			entry["slot"] = slot
+		}
+		ingredients[ingredient] = entry
+	}
+	for ingredient, slot := range ingredientToSlot {
+		if _, seen := ingredients[ingredient]; seen {
+			continue
+		}
+		ingredients[ingredient] = map[string]any{"in_stock": false, "slot": slot}
+	}
+	return map[string]any{"inventory": map[string]any{"ingredients": ingredients}}, nil
 }
 
 func (b *bartender) handleUpdateInventoryItem(raw any) (map[string]any, error) {
