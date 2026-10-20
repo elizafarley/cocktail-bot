@@ -18,6 +18,7 @@ export const DRINK_IMAGE_SLUGS = [
   "moscow-mule",
   "negroni",
   "old-fashioned",
+  "witchs-brew",
 ] as const;
 
 export interface Pour {
