@@ -147,7 +147,13 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
           ) : (
             <>
               {slots.length > 0 && (
-                <SlotsSection slots={slots} ingredientNames={ingredientNames} busy={busy} onAssign={assignSlot} />
+                <RackSection
+                  slots={slots}
+                  ingredients={inventory.ingredients}
+                  ingredientNames={ingredientNames}
+                  busy={busy}
+                  onAssign={assignSlot}
+                />
               )}
               {items.length === 0 ? (
                 <p className={styles.empty}>No ingredients yet. Add one above.</p>
@@ -207,45 +213,116 @@ function PourerOzInput({
   );
 }
 
-function SlotsSection({
+type Slot = { id: string; ingredient?: string };
+type IngredientRecord = Record<string, { in_stock: boolean; slot?: string; pourer_oz?: number }>;
+
+function parseSlotId(id: string): { letter: string; row: string } {
+  const parts = id.split("-");
+  const letter = (parts[1] ?? "").toUpperCase();
+  const row = parts.slice(2).join(" ");
+  return { letter, row };
+}
+
+function RackSection({
   slots,
+  ingredients,
   ingredientNames,
   busy,
   onAssign,
 }: {
-  slots: { id: string; ingredient?: string }[];
+  slots: Slot[];
+  ingredients: IngredientRecord;
   ingredientNames: string[];
   busy: boolean;
   onAssign: (slot: string, ingredient: string) => void;
 }) {
+  const groups = new Map<string, Slot[]>();
+  for (const slot of slots) {
+    const { row } = parseSlotId(slot.id);
+    const key = row || "other";
+    const list = groups.get(key) ?? [];
+    list.push(slot);
+    groups.set(key, list);
+  }
+  for (const list of groups.values()) {
+    list.sort((a, b) => a.id.localeCompare(b.id));
+  }
+
   return (
     <section className={styles.section}>
       <h2>
-        Slots
+        On the rack
         <span className={styles.sectionCount}>{slots.length}</span>
       </h2>
-      <div className={styles.rows}>
-        {slots.map((slot) => (
-          <div key={slot.id} className={`${styles.row} ${styles.rowSlot}`}>
-            <span className={styles.dot} style={{ background: slot.ingredient ? "var(--ok)" : "var(--smoke)" }} aria-hidden />
-            <span className={styles.name}>{slot.id}</span>
-            <select
-              className={styles.select}
-              value={slot.ingredient ?? ""}
-              onChange={(e) => onAssign(slot.id, e.target.value)}
-              disabled={busy}
-            >
-              <option value="">— empty —</option>
-              {ingredientNames.map((n) => (
-                <option key={n} value={n}>
-                  {titleCase(n)}
-                </option>
-              ))}
-            </select>
+      {[...groups.entries()].map(([row, rowSlots]) => (
+        <div key={row} className={styles.rackGroup}>
+          <h3 className={styles.rowLabel}>{titleCase(row)}</h3>
+          <div className={styles.rack}>
+            {rowSlots.map((slot) => (
+              <RackCard
+                key={slot.id}
+                slot={slot}
+                stock={slot.ingredient ? ingredients[slot.ingredient] : undefined}
+                ingredientNames={ingredientNames}
+                busy={busy}
+                onAssign={onAssign}
+              />
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </section>
+  );
+}
+
+function RackCard({
+  slot,
+  stock,
+  ingredientNames,
+  busy,
+  onAssign,
+}: {
+  slot: Slot;
+  stock: { in_stock: boolean; pourer_oz?: number } | undefined;
+  ingredientNames: string[];
+  busy: boolean;
+  onAssign: (slot: string, ingredient: string) => void;
+}) {
+  const { letter } = parseSlotId(slot.id);
+  const hasBottle = Boolean(slot.ingredient);
+  const inStock = hasBottle && stock?.in_stock;
+  const statusLabel = !hasBottle ? "Empty" : inStock ? "In stock" : "Out of stock";
+  const dotColor = !hasBottle ? "var(--smoke)" : inStock ? "var(--ok)" : "var(--bad)";
+
+  return (
+    <div className={styles.rackCard}>
+      <div className={styles.rackHead}>
+        <span className={styles.rackLetter}>{letter}</span>
+        <span className={styles.rackSlotLabel}>Slot {letter}</span>
+      </div>
+      <span className={styles.rackBottle}>{hasBottle ? titleCase(slot.ingredient!) : "Empty slot"}</span>
+      {hasBottle && stock?.pourer_oz != null && (
+        <span className={styles.rackPourer}>{stock.pourer_oz} oz pourer</span>
+      )}
+      <span className={styles.rackStatus}>
+        <span className={styles.dot} style={{ background: dotColor }} aria-hidden />
+        {statusLabel}
+      </span>
+      <select
+        className={styles.select}
+        value={slot.ingredient ?? ""}
+        onChange={(e) => onAssign(slot.id, e.target.value)}
+        disabled={busy}
+        aria-label={`Bottle in slot ${letter}`}
+      >
+        <option value="">— empty —</option>
+        {ingredientNames.map((n) => (
+          <option key={n} value={n}>
+            {titleCase(n)}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
