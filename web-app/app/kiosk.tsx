@@ -13,6 +13,7 @@ import type { OrderStatus } from "./lib/viamClient";
 import type { Recipe } from "./lib/recipes";
 import type { Inventory } from "./lib/inventory";
 import { isAvailable } from "./lib/inventory";
+import { titleCase } from "./lib/display";
 import { Nav } from "./nav";
 import styles from "./kiosk.module.css";
 
@@ -30,6 +31,7 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   const [inventory, setInventory] = useState<Inventory | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderState>({ kind: "idle" });
+  const [confirming, setConfirming] = useState<Recipe | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,9 +88,15 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
       <div className={styles.scope}>
         <main className={styles.main}>
           <h1 className={styles.title}>What can we make you?</h1>
-          <p className={`${styles.sub} ${connected ? styles.ok : styles.warn}`}>
-            {connected ? "Connected" : "Reconnecting"} to {machineName || conn.hostname}
-            {conn.isDev && " (dev mock)"}
+          <p className={styles.sub}>
+            Tap a drink to see what&rsquo;s in it.
+            {!connected && (
+              <span className={styles.warn}>
+                {" · reconnecting to "}
+                {machineName || conn.hostname}
+              </span>
+            )}
+            {conn.isDev && " · dev mock"}
           </p>
 
           <div className={styles.kBody}>
@@ -106,7 +114,7 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
                   recipes={visible}
                   inventory={inventory}
                   disabled={order.kind === "running"}
-                  onOrder={startOrder}
+                  onPick={setConfirming}
                 />
               )}
             </div>
@@ -114,6 +122,18 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
             <KioskQueue conn={conn} order={order} />
           </div>
         </main>
+
+        {confirming && (
+          <ConfirmOrder
+            recipe={confirming}
+            onCancel={() => setConfirming(null)}
+            onConfirm={() => {
+              const picked = confirming;
+              setConfirming(null);
+              startOrder(picked);
+            }}
+          />
+        )}
 
         {order.kind === "error" && (
           <OrderError recipe={order.recipe} message={order.message} onDismiss={dismissError} />
@@ -139,12 +159,12 @@ function DrinkGrid({
   recipes,
   inventory,
   disabled,
-  onOrder,
+  onPick,
 }: {
   recipes: Recipe[];
   inventory: Inventory;
   disabled: boolean;
-  onOrder: (recipe: Recipe) => void;
+  onPick: (recipe: Recipe) => void;
 }) {
   const sorted = [...recipes].sort((a, b) => {
     const aAvail = isAvailable(a, inventory);
@@ -161,17 +181,51 @@ function DrinkGrid({
             <button
               type="button"
               className={`${styles.drink} ${!available ? styles.out : ""}`}
-              onClick={() => onOrder(recipe)}
+              onClick={() => onPick(recipe)}
               disabled={disabled || !available}
             >
               <DrinkArt slug={recipe.image} name={recipe.name} />
               <h2>{recipe.name}</h2>
-              <p>{available ? `${recipe.pours.length} ingredients` : "Out of stock"}</p>
+              {!available && <p>Out of stock</p>}
             </button>
           </li>
         );
       })}
     </ul>
+  );
+}
+
+function ConfirmOrder({
+  recipe,
+  onCancel,
+  onConfirm,
+}: {
+  recipe: Recipe;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className={styles.scrim} onClick={onCancel}>
+      <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
+        <h3>{recipe.name}</h3>
+        <ul className={styles.pours}>
+          {recipe.pours.map((pour, i) => (
+            <li key={i}>
+              <span>{titleCase(pour.ingredient)}</span>
+              <span>{pour.oz} oz</span>
+            </li>
+          ))}
+        </ul>
+        <div className={styles.btns}>
+          <button type="button" className={styles.btn} onClick={onCancel}>
+            Back
+          </button>
+          <button type="button" className={`${styles.btn} ${styles.btnMain}`} onClick={onConfirm}>
+            Order
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -161,6 +161,7 @@
 }
 .art {
   height: 200px;
+  padding: 20px;
   border-radius: 14px;
   background: var(--tile);
   display: flex;
@@ -169,8 +170,8 @@
   overflow: hidden;
 }
 .art img {
-  max-height: 100%;
-  max-width: 100%;
+  width: 70%;
+  height: 70%;
   object-fit: contain;
   display: block;
 }
@@ -269,4 +270,27 @@
 .btnMain {
   background: var(--verm);
   color: #fff;
+}
+
+.pours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.pours li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--hair);
+  font-size: 18px;
+}
+.pours li:first-child {
+  border-top: 0;
+}
+.pours li span:last-child {
+  color: var(--smoke);
+  font-variant-numeric: tabular-nums;
 }
