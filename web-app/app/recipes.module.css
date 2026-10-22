@@ -130,12 +130,6 @@
   grid-template-columns: 32px 1fr 120px;
   min-height: 48px;
 }
-.ing .head {
-  min-height: 36px;
-  font-size: 14px;
-  color: var(--smoke);
-  border-top: 0;
-}
 .num {
   font-variant-numeric: tabular-nums;
 }
@@ -255,16 +249,40 @@
   background: var(--paper);
   color: var(--ink);
 }
-.toggle {
+.switchRow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 0 18px;
   font-size: 17px;
 }
-.toggle input {
-  width: 22px;
-  height: 22px;
-  accent-color: var(--verm);
+.switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hair);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.switch[aria-checked="true"] {
+  background: var(--ok);
+}
+.switchThumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+}
+.switch[aria-checked="true"] .switchThumb {
+  transform: translateX(18px);
 }
 .sub {
   font-size: 17px;
@@ -273,16 +291,23 @@
   color: var(--ink);
 }
 
+.pourHead {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 36px;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--smoke);
+  margin: 0 0 6px;
+}
 .pour {
   display: grid;
   grid-template-columns: 1.6fr 1fr 36px;
   gap: 10px;
-  align-items: end;
-  margin-bottom: 12px;
+  align-items: center;
+  margin-bottom: 10px;
 }
 .rm {
   height: 44px;
-  margin-bottom: 16px;
   border-radius: 12px;
   color: var(--smoke);
   background: none;
