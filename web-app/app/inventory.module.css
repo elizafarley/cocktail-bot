@@ -356,21 +356,40 @@
   max-width: 100%;
   border: 1px solid var(--hair);
   border-radius: 18px;
-  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
   position: sticky;
   top: 24px;
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
+  height: calc(100vh - 48px);
+  overflow: hidden;
   background: var(--paper);
 }
 .panelHead {
+  flex: 0 0 auto;
+  padding: 24px 24px 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+}
+.panelBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+@media (max-width: 900px) {
+  .panel {
+    position: static;
+    height: auto;
+    overflow: visible;
+  }
+  .panelBody {
+    overflow-y: visible;
+  }
 }
 .panelCrumb {
   margin: 0 0 4px;
@@ -450,11 +469,12 @@
   box-shadow: inset 0 0 0 1px var(--hair);
 }
 .panelActions {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
   border-top: 1px solid var(--hair);
-  padding-top: 20px;
+  padding: 20px 24px 24px;
 }
 .panelBtn,
 .panelBtnGhost,

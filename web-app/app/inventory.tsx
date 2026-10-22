@@ -236,11 +236,17 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                 />
               ) : (
                 <aside className={`${styles.panel} ${styles.panelEmpty}`} aria-hidden>
-                  <p className={styles.panelCrumb}>Side panel</p>
-                  <h2 className={styles.panelTitle}>Pick a slot</h2>
-                  <p className={styles.panelHint}>
-                    Tap any card above to change its bottle, set the pourer size, or mark it out of stock.
-                  </p>
+                  <div className={styles.panelHead}>
+                    <div>
+                      <p className={styles.panelCrumb}>Side panel</p>
+                      <h2 className={styles.panelTitle}>Pick a slot</h2>
+                    </div>
+                  </div>
+                  <div className={styles.panelBody}>
+                    <p className={styles.panelHint}>
+                      Tap any card above to change its bottle, set the pourer size, or mark it out of stock.
+                    </p>
+                  </div>
                 </aside>
               )}
             </div>
@@ -425,6 +431,7 @@ function SlotPanel({
         </button>
       </div>
 
+      <div className={styles.panelBody}>
       <label className={styles.panelField}>
         <span className={styles.panelLabel}>Bottle in this slot</span>
         <select
@@ -489,6 +496,7 @@ function SlotPanel({
           )}
         </fieldset>
       )}
+      </div>
 
       {hasBottle && (
         <div className={styles.panelActions}>
@@ -552,20 +560,22 @@ function IngredientPanel({
         </button>
       </div>
 
-      <CategoryField ingredient={name} initial={stock?.category ?? ""} busy={busy} onSave={onCategory} />
+      <div className={styles.panelBody}>
+        <CategoryField ingredient={name} initial={stock?.category ?? ""} busy={busy} onSave={onCategory} />
 
-      {usedIn.length > 0 && (
-        <div className={styles.panelField}>
-          <span className={styles.panelLabel}>Used in</span>
-          <div className={styles.usedChips}>
-            {usedIn.map((recipeName) => (
-              <span key={recipeName} className={styles.usedChip}>
-                {recipeName}
-              </span>
-            ))}
+        {usedIn.length > 0 && (
+          <div className={styles.panelField}>
+            <span className={styles.panelLabel}>Used in</span>
+            <div className={styles.usedChips}>
+              {usedIn.map((recipeName) => (
+                <span key={recipeName} className={styles.usedChip}>
+                  {recipeName}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className={styles.panelActions}>
         <button
