@@ -307,6 +307,32 @@ function tiltsLine(oz: number, pourerOz: number | undefined): string | null {
   return `${rounded} tilt${rounded === 1 ? "" : "s"} of the ${fmtOz(pourerOz)} oz pourer`;
 }
 
+function StepToggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <div className={styles.stepRow}>
+      <span>{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
+        className={styles.switch}
+        onClick={() => onChange(!value)}
+      >
+        <span className={styles.switchThumb} />
+      </button>
+    </div>
+  );
+}
+
 function RecipeEditor({
   initial,
   existingIndex,
@@ -337,6 +363,9 @@ function RecipeEditor({
   const [pours, setPours] = useState<Pour[]>(
     initial.pours.length > 0 ? initial.pours : [{ ingredient: ingredientNames[0] ?? "", oz: 1 }],
   );
+  const [crushedIce, setCrushedIce] = useState(initial.crushed_ice ?? true);
+  const [shake, setShake] = useState(initial.shake ?? true);
+  const [strain, setStrain] = useState(initial.strain ?? true);
 
   const effectiveId = slugify(name) || initial.id;
   const totalOz = pours.reduce((sum, p) => sum + (Number.isFinite(p.oz) ? p.oz : 0), 0);
@@ -364,7 +393,15 @@ function RecipeEditor({
       alert("Recipe id is required");
       return;
     }
-    const next: Recipe = { id: effectiveId, name: trimmedName, pours, on_menu: onMenu };
+    const next: Recipe = {
+      id: effectiveId,
+      name: trimmedName,
+      pours,
+      on_menu: onMenu,
+      crushed_ice: crushedIce,
+      shake,
+      strain,
+    };
     if (image) next.image = image;
     const trimmedSection = section.trim();
     if (trimmedSection) next.section = trimmedSection;
@@ -557,6 +594,13 @@ function RecipeEditor({
               </button>
               <span className={styles.pourTotal}>{fmtOz(totalOz)} oz in the glass</span>
             </div>
+          </div>
+
+          <div className={styles.stepsSection}>
+            <h3 className={styles.pourSectionTitle}>Steps</h3>
+            <StepToggle label="Crushed ice" value={crushedIce} onChange={setCrushedIce} />
+            <StepToggle label="Shake" value={shake} onChange={setShake} />
+            <StepToggle label="Strain" value={strain} onChange={setStrain} />
           </div>
         </div>
 

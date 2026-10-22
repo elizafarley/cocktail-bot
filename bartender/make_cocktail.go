@@ -36,9 +36,11 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 	if d.ShakerSource == "" || d.IceStation == "" || d.MixerStation == "" || d.StrainFlow == "" || d.ServeStation == "" {
 		return errors.New("make_cocktail: recipe_defaults is missing one of shaker_source, ice_station, mixer_station, strain_flow, serve_station")
 	}
-	b.status.setPhase("Dispensing ice")
-	if err := b.dispenseIce(ctx, d.IceStation, d.IceDwellMs); err != nil {
-		return fmt.Errorf("dispense ice: %w", err)
+	if stepEnabled(recipe.CrushedIce) {
+		b.status.setPhase("Dispensing ice")
+		if err := b.dispenseIce(ctx, d.IceStation, d.IceDwellMs); err != nil {
+			return fmt.Errorf("dispense ice: %w", err)
+		}
 	}
 	for i, pour := range recipe.Pours {
 		if pour.Ingredient == "" {
@@ -49,18 +51,22 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 			return fmt.Errorf("pour %d (%s): %w", i+1, pour.Ingredient, err)
 		}
 	}
-	b.status.setPhase("Mixing")
-	if err := b.mix(ctx, d.MixerStation, d.MixDwellMs); err != nil {
-		return fmt.Errorf("mix: %w", err)
+	if stepEnabled(recipe.Shake) {
+		b.status.setPhase("Shaking")
+		if err := b.mix(ctx, d.MixerStation, d.MixDwellMs); err != nil {
+			return fmt.Errorf("shake: %w", err)
+		}
 	}
-	b.status.setPhase("Straining")
-	if err := b.strainShaker(ctx, strainShakerRequest{
-		source:       d.ShakerSource,
-		strainFlow:   d.StrainFlow,
-		drainDwellMs: d.StrainDrainMs,
-		dumpDwellMs:  d.StrainDumpMs,
-	}); err != nil {
-		return fmt.Errorf("strain: %w", err)
+	if stepEnabled(recipe.Strain) {
+		b.status.setPhase("Straining")
+		if err := b.strainShaker(ctx, strainShakerRequest{
+			source:       d.ShakerSource,
+			strainFlow:   d.StrainFlow,
+			drainDwellMs: d.StrainDrainMs,
+			dumpDwellMs:  d.StrainDumpMs,
+		}); err != nil {
+			return fmt.Errorf("strain: %w", err)
+		}
 	}
 	b.status.setPhase("Serving")
 	if err := b.pourFromShaker(ctx, d.ServeStation, d.ServeMs); err != nil {
