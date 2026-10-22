@@ -10,24 +10,51 @@ import (
 )
 
 type Recipe struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Pours      []Pour `json:"pours"`
-	OnMenu     bool   `json:"on_menu,omitempty"`
-	Image      string `json:"image,omitempty"`
-	Section    string `json:"section,omitempty"`
-	Tag        string `json:"tag,omitempty"`
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	Steps     []RecipeStep `json:"steps,omitempty"`
+	OnMenu    bool         `json:"on_menu,omitempty"`
+	Image     string       `json:"image,omitempty"`
+	Section   string       `json:"section,omitempty"`
+	Tag       string       `json:"tag,omitempty"`
 	SortOrder  int    `json:"sort_order,omitempty"`
+	Pours      []Pour `json:"pours,omitempty"`
 	CrushedIce *bool  `json:"crushed_ice,omitempty"`
 	Shake      *bool  `json:"shake,omitempty"`
 	Strain     *bool  `json:"strain,omitempty"`
 }
 
-// stepEnabled returns true when a brew step should run. nil means the recipe
-// predates the steps feature; treat as enabled so existing recipes keep
-// behaving the same way.
+type RecipeStep struct {
+	Kind       string  `json:"kind"`
+	Ingredient string  `json:"ingredient,omitempty"`
+	Oz         float64 `json:"oz,omitempty"`
+	Target     string  `json:"target,omitempty"`
+	IceType    string  `json:"type,omitempty"`
+	MixMode    string  `json:"mode,omitempty"`
+}
+
 func stepEnabled(flag *bool) bool {
 	return flag == nil || *flag
+}
+
+func stepsFor(r Recipe) []RecipeStep {
+	if len(r.Steps) > 0 {
+		return r.Steps
+	}
+	out := make([]RecipeStep, 0, len(r.Pours)+3)
+	if stepEnabled(r.CrushedIce) {
+		out = append(out, RecipeStep{Kind: "ice", IceType: "crushed", Target: "shaker"})
+	}
+	for _, p := range r.Pours {
+		out = append(out, RecipeStep{Kind: "pour", Target: "shaker", Ingredient: p.Ingredient, Oz: p.Oz})
+	}
+	if stepEnabled(r.Shake) {
+		out = append(out, RecipeStep{Kind: "mix", MixMode: "shake"})
+	}
+	if stepEnabled(r.Strain) {
+		out = append(out, RecipeStep{Kind: "strain"})
+	}
+	return out
 }
 
 type Pour struct {

@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ViamConnection } from "./lib/viamClient";
 import { getBottles, getInventory, getRecipes, updateRecipes } from "./lib/viamClient";
-import type { Pour, Recipe } from "./lib/recipes";
-import { COMMON_RECIPE_SECTIONS, COMMON_RECIPE_TAGS, DRINK_IMAGE_SLUGS } from "./lib/recipes";
+import type { Recipe } from "./lib/recipes";
+import { COMMON_RECIPE_SECTIONS, COMMON_RECIPE_TAGS, DRINK_IMAGE_SLUGS, recipePours, stepsFor } from "./lib/recipes";
+import type { RecipeStep, PourTarget } from "./lib/recipes";
 import type { Inventory } from "./lib/inventory";
 import { isAvailable } from "./lib/inventory";
 import { Nav } from "./nav";
@@ -67,7 +68,7 @@ type RecipeStatus =
 function recipeStatus(recipe: Recipe, inventory: Inventory | null): RecipeStatus {
   if (recipe.on_menu === false) return { kind: "off_menu" };
   if (!inventory) return { kind: "loading" };
-  for (const pour of recipe.pours) {
+  for (const pour of recipePours(recipe)) {
     const stock = inventory.ingredients[pour.ingredient];
     if (!stock || !stock.in_stock) return { kind: "missing", ingredient: pour.ingredient };
   }
@@ -225,7 +226,7 @@ function RecipeCard({
   status: RecipeStatus;
   onClick: () => void;
 }) {
-  const pours = recipe.pours
+  const pours = recipePours(recipe)
     .map((p) => `${fmtOz(p.oz)} oz ${cap(p.ingredient)}`)
     .join(" · ");
   return (
@@ -307,28 +308,174 @@ function tiltsLine(oz: number, pourerOz: number | undefined): string | null {
   return `${rounded} tilt${rounded === 1 ? "" : "s"} of the ${fmtOz(pourerOz)} oz pourer`;
 }
 
-function StepToggle({
-  label,
-  value,
-  onChange,
+function StepRow({
+  index,
+  step,
+  total,
+  ingredientNames,
+  inventory,
+  onUpdate,
+  onRemove,
+  onMove,
 }: {
-  label: string;
-  value: boolean;
-  onChange: (next: boolean) => void;
+  index: number;
+  step: RecipeStep;
+  total: number;
+  ingredientNames: string[];
+  inventory: Inventory | null;
+  onUpdate: (patch: Partial<RecipeStep>) => void;
+  onRemove: () => void;
+  onMove: (dir: -1 | 1) => void;
 }) {
   return (
-    <div className={styles.stepRow}>
-      <span>{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={value}
-        aria-label={label}
-        className={styles.switch}
-        onClick={() => onChange(!value)}
-      >
-        <span className={styles.switchThumb} />
+    <div className={styles.pourRow}>
+      <span className={styles.pourIndex}>{index + 1}</span>
+      <div className={styles.pourMain}>
+        <StepBody step={step} ingredientNames={ingredientNames} inventory={inventory} onUpdate={onUpdate} />
+      </div>
+      <div className={styles.stepControls}>
+        <button
+          type="button"
+          className={styles.rm}
+          onClick={() => onMove(-1)}
+          disabled={index === 0}
+          aria-label="Move up"
+          title="Move up"
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          className={styles.rm}
+          onClick={() => onMove(1)}
+          disabled={index === total - 1}
+          aria-label="Move down"
+          title="Move down"
+        >
+          ↓
+        </button>
+        <button type="button" className={styles.rm} onClick={onRemove} aria-label="Remove step">
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StepBody({
+  step,
+  ingredientNames,
+  inventory,
+  onUpdate,
+}: {
+  step: RecipeStep;
+  ingredientNames: string[];
+  inventory: Inventory | null;
+  onUpdate: (patch: Partial<RecipeStep>) => void;
+}) {
+  if (step.kind === "pour") {
+    const stock = inventory?.ingredients[step.ingredient];
+    const slot = stock?.slot ? slotLabel(stock.slot) : null;
+    const tilts = tiltsLine(step.oz, stock?.pourer_oz);
+    const target = step.target ?? "shaker";
+    return (
+      <>
+        <div className={styles.stepPourRow}>
+          {ingredientNames.length > 0 ? (
+            <select
+              className={styles.select}
+              value={step.ingredient}
+              onChange={(e) => onUpdate({ ingredient: e.target.value })}
+              aria-label="Pour ingredient"
+            >
+              {!ingredientNames.includes(step.ingredient) && step.ingredient !== "" && (
+                <option value={step.ingredient}>{cap(step.ingredient)} (unknown)</option>
+              )}
+              {step.ingredient === "" && <option value="">Pick…</option>}
+              {ingredientNames.map((n) => {
+                const nStock = inventory?.ingredients[n];
+                const nSlot = nStock?.slot ? slotLabel(nStock.slot) : null;
+                return (
+                  <option key={n} value={n}>
+                    {cap(n)}
+                    {nSlot ? ` · ${nSlot}` : ""}
+                  </option>
+                );
+              })}
+            </select>
+          ) : (
+            <input
+              className={styles.input}
+              type="text"
+              value={step.ingredient}
+              onChange={(e) => onUpdate({ ingredient: e.target.value })}
+              placeholder="ingredient"
+              aria-label="Pour ingredient"
+            />
+          )}
+          <input
+            className={styles.input}
+            type="number"
+            min={0}
+            step={0.25}
+            value={step.oz}
+            onChange={(e) => onUpdate({ oz: Math.max(0, Number(e.target.value)) })}
+            aria-label="Ounces"
+          />
+        </div>
+        <div className={styles.stepPourTargetRow}>
+          <label className={styles.stepTargetLabel}>Into</label>
+          <select
+            className={styles.select}
+            value={target}
+            onChange={(e) => onUpdate({ target: e.target.value as PourTarget })}
+            aria-label="Pour target"
+          >
+            <option value="shaker">Shaker</option>
+            <option value="glass">Glass</option>
+          </select>
+        </div>
+        {tilts && <span className={styles.pourTilt}>{tilts}</span>}
+        {!tilts && slot && <span className={styles.pourTilt}>Lives in {slot}</span>}
+      </>
+    );
+  }
+  if (step.kind === "ice") {
+    return <span className={styles.stepLabel}>Crushed ice → shaker</span>;
+  }
+  if (step.kind === "mix") {
+    return <span className={styles.stepLabel}>Shake</span>;
+  }
+  return <span className={styles.stepLabel}>Strain</span>;
+}
+
+function AddStepMenu({ onPick }: { onPick: (kind: RecipeStep["kind"]) => void }) {
+  const [open, setOpen] = useState(false);
+  function pick(kind: RecipeStep["kind"]) {
+    onPick(kind);
+    setOpen(false);
+  }
+  return (
+    <div className={styles.addStep}>
+      <button type="button" className={styles.btn} onClick={() => setOpen((v) => !v)}>
+        + Add step
       </button>
+      {open && (
+        <div className={styles.addStepMenu} role="menu">
+          <button type="button" className={styles.addStepItem} onClick={() => pick("pour")}>
+            Pour
+          </button>
+          <button type="button" className={styles.addStepItem} onClick={() => pick("ice")}>
+            Crushed ice
+          </button>
+          <button type="button" className={styles.addStepItem} onClick={() => pick("mix")}>
+            Shake
+          </button>
+          <button type="button" className={styles.addStepItem} onClick={() => pick("strain")}>
+            Strain
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -360,26 +507,49 @@ function RecipeEditor({
   const [sortOrder, setSortOrder] = useState<string>(
     initial.sort_order != null ? String(initial.sort_order) : "",
   );
-  const [pours, setPours] = useState<Pour[]>(
-    initial.pours.length > 0 ? initial.pours : [{ ingredient: ingredientNames[0] ?? "", oz: 1 }],
-  );
-  const [crushedIce, setCrushedIce] = useState(initial.crushed_ice ?? true);
-  const [shake, setShake] = useState(initial.shake ?? true);
-  const [strain, setStrain] = useState(initial.strain ?? true);
+  const [steps, setSteps] = useState<RecipeStep[]>(() => {
+    const existing = stepsFor(initial);
+    if (existing.length > 0) return existing;
+    return [
+      { kind: "ice", type: "crushed", target: "shaker" },
+      { kind: "pour", target: "shaker", ingredient: ingredientNames[0] ?? "", oz: 1 },
+      { kind: "mix", mode: "shake" },
+      { kind: "strain" },
+    ];
+  });
 
   const effectiveId = slugify(name) || initial.id;
-  const totalOz = pours.reduce((sum, p) => sum + (Number.isFinite(p.oz) ? p.oz : 0), 0);
+  const totalOz = steps
+    .filter((s): s is Extract<RecipeStep, { kind: "pour" }> => s.kind === "pour")
+    .reduce((sum, p) => sum + (Number.isFinite(p.oz) ? p.oz : 0), 0);
 
-  function updatePour(i: number, patch: Partial<Pour>) {
-    setPours((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  function updateStep(i: number, patch: Partial<RecipeStep>) {
+    setSteps((prev) => prev.map((s, idx) => (idx === i ? ({ ...s, ...patch } as RecipeStep) : s)));
   }
 
-  function removePour(i: number) {
-    setPours((prev) => prev.filter((_, idx) => idx !== i));
+  function removeStep(i: number) {
+    setSteps((prev) => prev.filter((_, idx) => idx !== i));
   }
 
-  function addPour() {
-    setPours((prev) => [...prev, { ingredient: ingredientNames[0] ?? "", oz: 1 }]);
+  function addStep(kind: RecipeStep["kind"]) {
+    setSteps((prev) => {
+      if (kind === "pour") {
+        return [...prev, { kind: "pour", target: "shaker", ingredient: ingredientNames[0] ?? "", oz: 1 }];
+      }
+      if (kind === "ice") return [...prev, { kind: "ice", type: "crushed", target: "shaker" }];
+      if (kind === "mix") return [...prev, { kind: "mix", mode: "shake" }];
+      return [...prev, { kind: "strain" }];
+    });
+  }
+
+  function moveStep(i: number, dir: -1 | 1) {
+    setSteps((prev) => {
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = prev.slice();
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -396,11 +566,8 @@ function RecipeEditor({
     const next: Recipe = {
       id: effectiveId,
       name: trimmedName,
-      pours,
+      steps,
       on_menu: onMenu,
-      crushed_ice: crushedIce,
-      shake,
-      strain,
     };
     if (image) next.image = image;
     const trimmedSection = section.trim();
@@ -519,88 +686,27 @@ function RecipeEditor({
 
           <div className={styles.pourSection}>
             <div className={styles.pourSectionHead}>
-              <h3 className={styles.pourSectionTitle}>Pours, in order</h3>
-              <span className={styles.pourHeadOz}>Oz</span>
-            </div>
-
-            {pours.map((pour, i) => {
-              const stock = inventory?.ingredients[pour.ingredient];
-              const slot = stock?.slot ? slotLabel(stock.slot) : null;
-              const tilts = tiltsLine(pour.oz, stock?.pourer_oz);
-              return (
-                <div key={i} className={styles.pourRow}>
-                  <span className={styles.pourIndex}>{i + 1}</span>
-                  <div className={styles.pourMain}>
-                    {ingredientNames.length > 0 ? (
-                      <select
-                        className={styles.select}
-                        value={pour.ingredient}
-                        onChange={(e) => updatePour(i, { ingredient: e.target.value })}
-                        aria-label={`Ingredient ${i + 1}`}
-                      >
-                        {!ingredientNames.includes(pour.ingredient) && pour.ingredient !== "" && (
-                          <option value={pour.ingredient}>{cap(pour.ingredient)} (unknown)</option>
-                        )}
-                        {pour.ingredient === "" && <option value="">Pick…</option>}
-                        {ingredientNames.map((n) => {
-                          const nStock = inventory?.ingredients[n];
-                          const nSlot = nStock?.slot ? slotLabel(nStock.slot) : null;
-                          return (
-                            <option key={n} value={n}>
-                              {cap(n)}
-                              {nSlot ? ` · ${nSlot}` : ""}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    ) : (
-                      <input
-                        className={styles.input}
-                        type="text"
-                        value={pour.ingredient}
-                        onChange={(e) => updatePour(i, { ingredient: e.target.value })}
-                        placeholder="ingredient"
-                        aria-label={`Ingredient ${i + 1}`}
-                      />
-                    )}
-                    {tilts && <span className={styles.pourTilt}>{tilts}</span>}
-                    {!tilts && slot && <span className={styles.pourTilt}>Lives in {slot}</span>}
-                  </div>
-                  <input
-                    className={styles.input}
-                    type="number"
-                    min={0}
-                    step={0.25}
-                    value={pour.oz}
-                    onChange={(e) => updatePour(i, { oz: Math.max(0, Number(e.target.value)) })}
-                    aria-label={`Ounces for pour ${i + 1}`}
-                  />
-                  <button
-                    type="button"
-                    className={styles.rm}
-                    onClick={() => removePour(i)}
-                    disabled={pours.length === 1}
-                    aria-label={`Remove pour ${i + 1}`}
-                  >
-                    ✕
-                  </button>
-                </div>
-              );
-            })}
-
-            <div className={styles.pourAddRow}>
-              <button type="button" className={styles.btn} onClick={addPour}>
-                Add a pour
-              </button>
+              <h3 className={styles.pourSectionTitle}>Steps, in order</h3>
               <span className={styles.pourTotal}>{fmtOz(totalOz)} oz in the glass</span>
             </div>
-          </div>
 
-          <div className={styles.stepsSection}>
-            <h3 className={styles.pourSectionTitle}>Steps</h3>
-            <StepToggle label="Crushed ice" value={crushedIce} onChange={setCrushedIce} />
-            <StepToggle label="Shake" value={shake} onChange={setShake} />
-            <StepToggle label="Strain" value={strain} onChange={setStrain} />
+            {steps.map((step, i) => (
+              <StepRow
+                key={i}
+                index={i}
+                step={step}
+                total={steps.length}
+                ingredientNames={ingredientNames}
+                inventory={inventory}
+                onUpdate={(patch) => updateStep(i, patch)}
+                onRemove={() => removeStep(i)}
+                onMove={(dir) => moveStep(i, dir)}
+              />
+            ))}
+
+            <div className={styles.pourAddRow}>
+              <AddStepMenu onPick={addStep} />
+            </div>
           </div>
         </div>
 
