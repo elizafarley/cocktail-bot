@@ -29,6 +29,7 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("All");
 
   const load = useCallback(() => {
@@ -138,6 +139,19 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
   const selectedSlot = selectedSlotId ? slots.find((s) => s.id === selectedSlotId) ?? null : null;
   const selectedStock =
     inventory && selectedSlot?.ingredient ? inventory.ingredients[selectedSlot.ingredient] : undefined;
+  const activeIngredient = selectedIngredient && inventory?.ingredients[selectedIngredient] ? selectedIngredient : null;
+  const activeIngredientStock = activeIngredient ? inventory!.ingredients[activeIngredient] : undefined;
+
+  function pickIngredient(name: string) {
+    const stock = inventory?.ingredients[name];
+    if (stock?.slot) {
+      setSelectedSlotId((prev) => (prev === stock.slot ? null : stock.slot!));
+      setSelectedIngredient(null);
+    } else {
+      setSelectedSlotId(null);
+      setSelectedIngredient((prev) => (prev === name ? null : name));
+    }
+  }
 
   return (
     <>
@@ -192,6 +206,8 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                     filter={filter}
                     onFilter={setFilter}
                     busy={busy}
+                    selectedName={activeIngredient ?? (selectedSlot?.ingredient ?? null)}
+                    onPick={pickIngredient}
                     onDelete={remove}
                   />
                 )}
@@ -209,6 +225,16 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                   onDeleteIngredient={remove}
                   onCategory={saveCategory}
                   onClose={() => setSelectedSlotId(null)}
+                />
+              ) : activeIngredient ? (
+                <IngredientPanel
+                  name={activeIngredient}
+                  stock={activeIngredientStock}
+                  usedIn={usedIn.get(activeIngredient) ?? []}
+                  busy={busy}
+                  onCategory={saveCategory}
+                  onDeleteIngredient={remove}
+                  onClose={() => setSelectedIngredient(null)}
                 />
               ) : (
                 <aside className={`${styles.panel} ${styles.panelEmpty}`} aria-hidden>
@@ -498,6 +524,65 @@ function SlotPanel({
   );
 }
 
+function IngredientPanel({
+  name,
+  stock,
+  usedIn,
+  busy,
+  onCategory,
+  onDeleteIngredient,
+  onClose,
+}: {
+  name: string;
+  stock: { in_stock: boolean; pourer_oz?: number; category?: string } | undefined;
+  usedIn: string[];
+  busy: boolean;
+  onCategory: (ingredient: string, category: string) => void;
+  onDeleteIngredient: (ingredient: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <aside className={styles.panel} aria-label={name}>
+      <div className={styles.panelHead}>
+        <div>
+          <p className={styles.panelCrumb}>Not on rack</p>
+          <h2 className={styles.panelTitle}>{titleCase(name)}</h2>
+          <p className={styles.panelHint}>Assign a slot above before you can mark this in stock.</p>
+        </div>
+        <button type="button" className={styles.panelClose} onClick={onClose} aria-label="Close">
+          ✕
+        </button>
+      </div>
+
+      <CategoryField ingredient={name} initial={stock?.category ?? ""} busy={busy} onSave={onCategory} />
+
+      {usedIn.length > 0 && (
+        <div className={styles.panelField}>
+          <span className={styles.panelLabel}>Used in</span>
+          <div className={styles.usedChips}>
+            {usedIn.map((recipeName) => (
+              <span key={recipeName} className={styles.usedChip}>
+                {recipeName}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className={styles.panelActions}>
+        <button
+          type="button"
+          className={styles.panelBtnDanger}
+          onClick={() => onDeleteIngredient(name)}
+          disabled={busy}
+        >
+          Delete ingredient…
+        </button>
+      </div>
+    </aside>
+  );
+}
+
 function CategoryField({
   ingredient,
   initial,
@@ -539,6 +624,8 @@ function AllIngredientsSection({
   filter,
   onFilter,
   busy,
+  selectedName,
+  onPick,
   onDelete,
 }: {
   items: IngredientEntry[];
@@ -546,6 +633,8 @@ function AllIngredientsSection({
   filter: string;
   onFilter: (next: string) => void;
   busy: boolean;
+  selectedName: string | null;
+  onPick: (name: string) => void;
   onDelete: (name: string) => void;
 }) {
   const counts = new Map<string, number>();
@@ -609,6 +698,8 @@ function AllIngredientsSection({
               stock={stock}
               recipeNames={usedIn.get(name) ?? []}
               busy={busy}
+              selected={selectedName === name}
+              onPick={onPick}
               onDelete={onDelete}
             />
           ))}
@@ -646,12 +737,16 @@ function IngredientRow({
   stock,
   recipeNames,
   busy,
+  selected,
+  onPick,
   onDelete,
 }: {
   name: string;
   stock: { in_stock: boolean; slot?: string; pourer_oz?: number };
   recipeNames: string[];
   busy: boolean;
+  selected: boolean;
+  onPick: (name: string) => void;
   onDelete: (name: string) => void;
 }) {
   let dotColor = "transparent";
@@ -667,7 +762,19 @@ function IngredientRow({
     dotColor = "var(--bad)";
   }
   return (
-    <div className={styles.tableRow}>
+    <div
+      className={`${styles.tableRow} ${selected ? styles.tableRowSelected : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      onClick={() => onPick(name)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onPick(name);
+        }
+      }}
+    >
       <span className={styles.rowName}>{titleCase(name)}</span>
       <span className={styles.rowStatus}>
         <span
@@ -682,7 +789,10 @@ function IngredientRow({
       <button
         type="button"
         className={styles.btnIcon}
-        onClick={() => onDelete(name)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(name);
+        }}
         disabled={busy}
         aria-label={`Delete ${name}`}
         title="Delete"
