@@ -117,11 +117,6 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
                   <span className={styles.chev}>›</span>
                 </button>
                 <div className={`${styles.rows} ${styles.ing}`}>
-                  <div className={`${styles.row} ${styles.head}`}>
-                    <span>#</span>
-                    <span>Ingredient</span>
-                    <span>Target</span>
-                  </div>
                   {recipe.pours.length === 0 ? (
                     <div className={`${styles.row} ${styles.muted}`}>
                       <span className={`${styles.num} ${styles.muted}`}>—</span>
@@ -258,10 +253,18 @@ function RecipeEditor({
             />
           </label>
 
-          <label className={styles.toggle}>
-            <input type="checkbox" checked={onMenu} onChange={(e) => setOnMenu(e.target.checked)} />
-            On the menu
-          </label>
+          <div className={styles.switchRow}>
+            <span>On the menu</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={onMenu}
+              className={styles.switch}
+              onClick={() => setOnMenu((v) => !v)}
+            >
+              <span className={styles.switchThumb} />
+            </button>
+          </div>
 
           <label>
             <span>Illustration</span>
@@ -277,47 +280,47 @@ function RecipeEditor({
 
           <p className={styles.sub}>Pours, in order</p>
 
+          <div className={styles.pourHead}>
+            <span>Ingredient</span>
+            <span>Target (oz)</span>
+            <span />
+          </div>
+
           {pours.map((pour, i) => (
             <div key={i} className={styles.pour}>
-              <label>
-                <span>Ingredient</span>
-                {ingredientNames.length > 0 ? (
-                  <select
-                    className={styles.select}
-                    value={pour.ingredient}
-                    onChange={(e) => updatePour(i, { ingredient: e.target.value })}
-                  >
-                    {!ingredientNames.includes(pour.ingredient) && pour.ingredient !== "" && (
-                      <option value={pour.ingredient}>{pour.ingredient} (unknown)</option>
-                    )}
-                    {pour.ingredient === "" && <option value="">Pick…</option>}
-                    {ingredientNames.map((n) => (
-                      <option key={n} value={n}>
-                        {cap(n)}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    className={styles.input}
-                    type="text"
-                    value={pour.ingredient}
-                    onChange={(e) => updatePour(i, { ingredient: e.target.value })}
-                    placeholder="ingredient"
-                  />
-                )}
-              </label>
-              <label>
-                <span>Target (oz)</span>
+              {ingredientNames.length > 0 ? (
+                <select
+                  className={styles.select}
+                  value={pour.ingredient}
+                  onChange={(e) => updatePour(i, { ingredient: e.target.value })}
+                >
+                  {!ingredientNames.includes(pour.ingredient) && pour.ingredient !== "" && (
+                    <option value={pour.ingredient}>{pour.ingredient} (unknown)</option>
+                  )}
+                  {pour.ingredient === "" && <option value="">Pick…</option>}
+                  {ingredientNames.map((n) => (
+                    <option key={n} value={n}>
+                      {cap(n)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
                 <input
                   className={styles.input}
-                  type="number"
-                  min={0}
-                  step={0.25}
-                  value={pour.oz}
-                  onChange={(e) => updatePour(i, { oz: Math.max(0, Number(e.target.value)) })}
+                  type="text"
+                  value={pour.ingredient}
+                  onChange={(e) => updatePour(i, { ingredient: e.target.value })}
+                  placeholder="ingredient"
                 />
-              </label>
+              )}
+              <input
+                className={styles.input}
+                type="number"
+                min={0}
+                step={0.25}
+                value={pour.oz}
+                onChange={(e) => updatePour(i, { oz: Math.max(0, Number(e.target.value)) })}
+              />
               <button
                 type="button"
                 className={styles.rm}
