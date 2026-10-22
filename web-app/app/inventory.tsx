@@ -202,7 +202,6 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                 ) : (
                   <AllIngredientsSection
                     items={items}
-                    usedIn={usedIn}
                     filter={filter}
                     onFilter={setFilter}
                     selectedName={activeIngredient ?? (selectedSlot?.ingredient ?? null)}
@@ -628,14 +627,12 @@ function CategoryField({
 
 function AllIngredientsSection({
   items,
-  usedIn,
   filter,
   onFilter,
   selectedName,
   onPick,
 }: {
   items: IngredientEntry[];
-  usedIn: Map<string, string[]>;
   filter: string;
   onFilter: (next: string) => void;
   selectedName: string | null;
@@ -688,7 +685,6 @@ function AllIngredientsSection({
         <span>Ingredient</span>
         <span>Status</span>
         <span>Pourer</span>
-        <span>Used in</span>
       </div>
 
       {orderedCats.map((cat) => (
@@ -699,7 +695,6 @@ function AllIngredientsSection({
               key={name}
               name={name}
               stock={stock}
-              recipeNames={usedIn.get(name) ?? []}
               selected={selectedName === name}
               onPick={onPick}
             />
@@ -736,13 +731,11 @@ function FilterChip({
 function IngredientRow({
   name,
   stock,
-  recipeNames,
   selected,
   onPick,
 }: {
   name: string;
   stock: { in_stock: boolean; slot?: string; pourer_oz?: number };
-  recipeNames: string[];
   selected: boolean;
   onPick: (name: string) => void;
 }) {
@@ -782,7 +775,6 @@ function IngredientRow({
         {statusLabel}
       </span>
       <span className={styles.rowPourer}>{stock.pourer_oz != null ? `${stock.pourer_oz} oz` : "—"}</span>
-      <span className={styles.rowUsed}>{recipeNames.length > 0 ? recipeNames.join(", ") : "—"}</span>
     </div>
   );
 }
