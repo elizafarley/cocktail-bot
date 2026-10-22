@@ -318,15 +318,20 @@ export async function pourFromShaker(
   });
 }
 
-export async function makeCocktail(conn: ViamConnection, drinkId: string): Promise<void> {
+export async function makeCocktail(
+  conn: ViamConnection,
+  drinkId: string,
+  quantity: number = 1,
+): Promise<void> {
+  const q = Math.max(1, Math.min(4, Math.floor(quantity)));
   if (conn.isDev) {
     const recipe = DEV_RECIPES.find((r) => r.id === drinkId);
     const phases = (recipe?.pours.length ?? 0) + 5;
-    await new Promise((resolve) => setTimeout(resolve, DEV_VERB_DELAY_MS * phases));
+    await new Promise((resolve) => setTimeout(resolve, DEV_VERB_DELAY_MS * phases * q));
     return;
   }
   const resp = await doCommand<{ started_at: string }>(conn, BARTENDER_SERVICE_NAME, {
-    make_cocktail: { drink_id: drinkId },
+    make_cocktail: { drink_id: drinkId, quantity: q },
   });
   const firedAt = new Date(resp.started_at).getTime();
   while (true) {

@@ -20,8 +20,8 @@ import styles from "./kiosk.module.css";
 
 type OrderState =
   | { kind: "idle" }
-  | { kind: "running"; recipe: Recipe }
-  | { kind: "done"; recipe: Recipe; at: number }
+  | { kind: "running"; recipe: Recipe; customerName?: string; quantity: number }
+  | { kind: "done"; recipe: Recipe; at: number; customerName?: string; quantity: number }
   | { kind: "error"; recipe: Recipe; message: string };
 
 const READY_CARD_MS = 60_000;
@@ -58,11 +58,12 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   }, [conn]);
 
   const startOrder = useCallback(
-    async (recipe: Recipe) => {
-      setOrder({ kind: "running", recipe });
+    async (recipe: Recipe, quantity: number, customerName?: string) => {
+      const name = customerName?.trim() || undefined;
+      setOrder({ kind: "running", recipe, customerName: name, quantity });
       try {
-        await makeCocktail(conn, recipe.id);
-        setOrder({ kind: "done", recipe, at: Date.now() });
+        await makeCocktail(conn, recipe.id, quantity);
+        setOrder({ kind: "done", recipe, at: Date.now(), customerName: name, quantity });
       } catch (err) {
         setOrder({
           kind: "error",
@@ -137,14 +138,14 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
         </main>
 
         {confirming && (
-          <ConfirmOrder
+          <OrderSheet
             recipe={confirming.recipe}
             orderable={confirming.orderable}
             onCancel={() => setConfirming(null)}
-            onConfirm={() => {
+            onConfirm={(quantity, customerName) => {
               const picked = confirming.recipe;
               setConfirming(null);
-              startOrder(picked);
+              startOrder(picked, quantity, customerName);
             }}
           />
         )}
@@ -157,6 +158,10 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   );
 }
 
+function orderQuantityLabel(name: string, quantity: number): string {
+  return quantity > 1 ? `${name} × ${quantity}` : name;
+}
+
 function StatusPill({ order, connected }: { order: OrderState; connected: boolean }) {
   let dotColor = "var(--ok)";
   let text: string;
@@ -165,10 +170,12 @@ function StatusPill({ order, connected }: { order: OrderState; connected: boolea
     text = "Reconnecting…";
   } else if (order.kind === "running") {
     dotColor = "var(--verm)";
-    text = `Making ${order.recipe.name}`;
+    const label = orderQuantityLabel(order.recipe.name, order.quantity);
+    text = order.customerName ? `Making ${label} for ${order.customerName}` : `Making ${label}`;
   } else if (order.kind === "done") {
     dotColor = "var(--ok)";
-    text = `${order.recipe.name} is ready`;
+    const label = orderQuantityLabel(order.recipe.name, order.quantity);
+    text = order.customerName ? `${label} is ready for ${order.customerName}` : `${label} is ready`;
   } else if (order.kind === "error") {
     dotColor = "var(--bad)";
     text = `${order.recipe.name} needs help`;
@@ -183,10 +190,20 @@ function StatusPill({ order, connected }: { order: OrderState; connected: boolea
   );
 }
 
-function DrinkArt({ slug, name, compact }: { slug?: string; name: string; compact?: boolean }) {
-  const className = compact ? styles.artCompact : styles.art;
+function DrinkArt({
+  slug,
+  name,
+  compact,
+  large,
+}: {
+  slug?: string;
+  name: string;
+  compact?: boolean;
+  large?: boolean;
+}) {
+  const className = compact ? styles.artCompact : large ? styles.artLarge : styles.art;
   if (!slug) return <div className={className} aria-hidden />;
-  const size = compact ? 48 : 150;
+  const size = compact ? 48 : large ? 180 : 150;
   return (
     <div className={className}>
       <picture>
@@ -331,7 +348,9 @@ function DrinkCard({
   );
 }
 
-function ConfirmOrder({
+const MAX_QUANTITY = 4;
+
+function OrderSheet({
   recipe,
   orderable,
   onCancel,
@@ -340,11 +359,19 @@ function ConfirmOrder({
   recipe: Recipe;
   orderable: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (quantity: number, customerName: string) => void;
 }) {
+  const [customerName, setCustomerName] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const decrement = () => setQuantity((q) => Math.max(1, q - 1));
+  const increment = () => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1));
+
   return (
     <div className={styles.scrim} onClick={onCancel}>
-      <div className={styles.sheet} onClick={(e) => e.stopPropagation()}>
+      <div className={`${styles.sheet} ${styles.sheetWide}`} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.sheetArt}>
+          <DrinkArt slug={recipe.image} name={recipe.name} large />
+        </div>
         <h3>{recipe.name}</h3>
         <ul className={styles.pours}>
           {recipe.pours.map((pour, i) => (
@@ -355,14 +382,55 @@ function ConfirmOrder({
           ))}
         </ul>
         {!orderable && <p className={styles.outNote}>Out of stock</p>}
+        {orderable && (
+          <div className={styles.sheetFields}>
+            <label className={styles.sheetField}>
+              <span>
+                Name for your order <span className={styles.sheetFieldHint}>(optional)</span>
+              </span>
+              <input
+                type="text"
+                className={styles.sheetInput}
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="So we can call it out"
+                maxLength={40}
+              />
+            </label>
+            <div className={styles.sheetField}>
+              <span id="qty-label">How many</span>
+              <div className={styles.stepper} role="group" aria-labelledby="qty-label">
+                <button
+                  type="button"
+                  className={styles.stepperBtn}
+                  onClick={decrement}
+                  disabled={quantity <= 1}
+                  aria-label="One fewer"
+                >
+                  −
+                </button>
+                <span className={styles.stepperValue}>{quantity}</span>
+                <button
+                  type="button"
+                  className={`${styles.stepperBtn} ${styles.stepperBtnActive}`}
+                  onClick={increment}
+                  disabled={quantity >= MAX_QUANTITY}
+                  aria-label="One more"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className={styles.btns}>
-          <button type="button" className={styles.btn} onClick={onCancel}>
+          <button type="button" className={`${styles.btn} ${styles.btnBig}`} onClick={onCancel}>
             Back
           </button>
           <button
             type="button"
-            className={`${styles.btn} ${styles.btnMain}`}
-            onClick={onConfirm}
+            className={`${styles.btn} ${styles.btnBig} ${styles.btnMain}`}
+            onClick={() => onConfirm(quantity, customerName)}
             disabled={!orderable}
           >
             Order
