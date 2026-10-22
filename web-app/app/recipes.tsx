@@ -189,6 +189,7 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
           initial={editing.recipe}
           existingIndex={editing.index}
           ingredientNames={ingredientNames}
+          inventory={inventory}
           busy={busy}
           onClose={() => setEditing(null)}
           onSave={onSaveEditing}
@@ -198,6 +199,7 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
           }}
         />
       )}
+
     </>
   );
 }
@@ -291,10 +293,25 @@ function RecipeStatusLine({ status }: { status: RecipeStatus }) {
   );
 }
 
+function slotLabel(slotId: string): string {
+  const parts = slotId.split("-");
+  const letter = (parts[1] ?? "").toUpperCase();
+  return letter ? `Slot ${letter}` : slotId;
+}
+
+function tiltsLine(oz: number, pourerOz: number | undefined): string | null {
+  if (pourerOz == null || pourerOz <= 0 || oz <= 0) return null;
+  const raw = oz / pourerOz;
+  const rounded = Math.round(raw);
+  if (Math.abs(raw - rounded) > 0.05) return null;
+  return `${rounded} tilt${rounded === 1 ? "" : "s"} of the ${fmtOz(pourerOz)} oz pourer`;
+}
+
 function RecipeEditor({
   initial,
   existingIndex,
   ingredientNames,
+  inventory,
   busy,
   onClose,
   onSave,
@@ -303,14 +320,13 @@ function RecipeEditor({
   initial: Recipe;
   existingIndex: number | null;
   ingredientNames: string[];
+  inventory: Inventory | null;
   busy: boolean;
   onClose: () => void;
   onSave: (recipe: Recipe) => void;
   onDelete: () => void;
 }) {
   const [name, setName] = useState(initial.name);
-  const [id, setId] = useState(initial.id);
-  const [idTouched, setIdTouched] = useState(initial.id !== "");
   const [onMenu, setOnMenu] = useState(initial.on_menu !== false);
   const [image, setImage] = useState(initial.image ?? "");
   const [section, setSection] = useState(initial.section ?? "");
@@ -321,6 +337,9 @@ function RecipeEditor({
   const [pours, setPours] = useState<Pour[]>(
     initial.pours.length > 0 ? initial.pours : [{ ingredient: ingredientNames[0] ?? "", oz: 1 }],
   );
+
+  const effectiveId = slugify(name) || initial.id;
+  const totalOz = pours.reduce((sum, p) => sum + (Number.isFinite(p.oz) ? p.oz : 0), 0);
 
   function updatePour(i: number, patch: Partial<Pour>) {
     setPours((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
@@ -337,7 +356,6 @@ function RecipeEditor({
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmedName = name.trim();
-    const effectiveId = (idTouched ? id.trim() : slugify(trimmedName)) || slugify(trimmedName);
     if (!trimmedName) {
       alert("Recipe name is required");
       return;
@@ -361,12 +379,17 @@ function RecipeEditor({
     <div className={styles.scope}>
       <div className={styles.scrim} onClick={onClose} />
       <form className={styles.panel} onSubmit={onSubmit}>
-        <div className={styles.panelHead}>
-          <div>
-            <h4>{initial.id ? "Edit recipe" : "New recipe"}</h4>
-            <div className={styles.muted}>Recipe</div>
+        <div className={styles.editorHead}>
+          <div className={styles.editorHeadLeft}>
+            <RecipeArt slug={image} name={name || "New recipe"} />
+            <div className={styles.editorTitleGroup}>
+              <h2 className={styles.editorTitle}>{name.trim() || "New recipe"}</h2>
+              <p className={styles.editorIdHint}>
+                ID: {effectiveId || "—"} <span className={styles.muted}>(set automatically)</span>
+              </p>
+            </div>
           </div>
-          <button type="button" className={styles.closeX} onClick={onClose} aria-label="Close">
+          <button type="button" className={styles.closeRound} onClick={onClose} aria-label="Close">
             ✕
           </button>
         </div>
@@ -384,17 +407,63 @@ function RecipeEditor({
             />
           </label>
 
+          <div className={styles.editorColumns}>
+            <label>
+              <span>Kiosk section</span>
+              <select
+                className={styles.select}
+                value={section}
+                onChange={(e) => setSection(e.target.value)}
+              >
+                <option value="">— None —</option>
+                {COMMON_RECIPE_SECTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+                {section && !COMMON_RECIPE_SECTIONS.includes(section) && (
+                  <option value={section}>{section}</option>
+                )}
+              </select>
+            </label>
+
+            <label>
+              <span>Tag</span>
+              <select className={styles.select} value={tag} onChange={(e) => setTag(e.target.value)}>
+                <option value="">— None —</option>
+                {COMMON_RECIPE_TAGS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+                {tag && !COMMON_RECIPE_TAGS.includes(tag) && <option value={tag}>{tag}</option>}
+              </select>
+            </label>
+          </div>
+
           <label>
-            <span>ID</span>
+            <span>Illustration</span>
+            <select className={styles.select} value={image} onChange={(e) => setImage(e.target.value)}>
+              <option value="">None (grey tile)</option>
+              {DRINK_IMAGE_SLUGS.map((slug) => (
+                <option key={slug} value={slug}>
+                  {cap(slug)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>
+              Sort order <span className={styles.muted}>(lower shows first)</span>
+            </span>
             <input
               className={styles.input}
-              type="text"
-              value={idTouched ? id : slugify(name)}
-              onChange={(e) => {
-                setIdTouched(true);
-                setId(e.target.value);
-              }}
-              placeholder="espresso_martini"
+              type="number"
+              step={1}
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              placeholder="0"
             />
           </label>
 
@@ -411,134 +480,95 @@ function RecipeEditor({
             </button>
           </div>
 
-          <label>
-            <span>Illustration</span>
-            <select className={styles.select} value={image} onChange={(e) => setImage(e.target.value)}>
-              <option value="">None (grey tile)</option>
-              {DRINK_IMAGE_SLUGS.map((slug) => (
-                <option key={slug} value={slug}>
-                  {cap(slug)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            <span>Section</span>
-            <input
-              className={styles.input}
-              type="text"
-              list="recipe-sections"
-              value={section}
-              onChange={(e) => setSection(e.target.value)}
-              placeholder="e.g. Classics"
-            />
-            <datalist id="recipe-sections">
-              {COMMON_RECIPE_SECTIONS.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-          </label>
-
-          <label>
-            <span>Tag</span>
-            <input
-              className={styles.input}
-              type="text"
-              list="recipe-tags"
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              placeholder="None"
-            />
-            <datalist id="recipe-tags">
-              {COMMON_RECIPE_TAGS.map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-          </label>
-
-          <label>
-            <span>Sort order <span className={styles.muted}>(lower shows first)</span></span>
-            <input
-              className={styles.input}
-              type="number"
-              step={1}
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-              placeholder="0"
-            />
-          </label>
-
-          <p className={styles.sub}>Pours, in order</p>
-
-          <div className={styles.pourHead}>
-            <span>Ingredient</span>
-            <span>Target (oz)</span>
-            <span />
-          </div>
-
-          {pours.map((pour, i) => (
-            <div key={i} className={styles.pour}>
-              {ingredientNames.length > 0 ? (
-                <select
-                  className={styles.select}
-                  value={pour.ingredient}
-                  onChange={(e) => updatePour(i, { ingredient: e.target.value })}
-                >
-                  {!ingredientNames.includes(pour.ingredient) && pour.ingredient !== "" && (
-                    <option value={pour.ingredient}>{pour.ingredient} (unknown)</option>
-                  )}
-                  {pour.ingredient === "" && <option value="">Pick…</option>}
-                  {ingredientNames.map((n) => (
-                    <option key={n} value={n}>
-                      {cap(n)}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  className={styles.input}
-                  type="text"
-                  value={pour.ingredient}
-                  onChange={(e) => updatePour(i, { ingredient: e.target.value })}
-                  placeholder="ingredient"
-                />
-              )}
-              <input
-                className={styles.input}
-                type="number"
-                min={0}
-                step={0.25}
-                value={pour.oz}
-                onChange={(e) => updatePour(i, { oz: Math.max(0, Number(e.target.value)) })}
-              />
-              <button
-                type="button"
-                className={styles.rm}
-                onClick={() => removePour(i)}
-                disabled={pours.length === 1}
-                aria-label={`Remove pour ${i + 1}`}
-              >
-                ✕
-              </button>
+          <div className={styles.pourSection}>
+            <div className={styles.pourSectionHead}>
+              <h3 className={styles.pourSectionTitle}>Pours, in order</h3>
+              <span className={styles.pourHeadOz}>Oz</span>
             </div>
-          ))}
 
-          <button type="button" className={styles.btn} onClick={addPour}>
-            Add a pour
-          </button>
+            {pours.map((pour, i) => {
+              const stock = inventory?.ingredients[pour.ingredient];
+              const slot = stock?.slot ? slotLabel(stock.slot) : null;
+              const tilts = tiltsLine(pour.oz, stock?.pourer_oz);
+              return (
+                <div key={i} className={styles.pourRow}>
+                  <span className={styles.pourIndex}>{i + 1}</span>
+                  <div className={styles.pourMain}>
+                    {ingredientNames.length > 0 ? (
+                      <select
+                        className={styles.select}
+                        value={pour.ingredient}
+                        onChange={(e) => updatePour(i, { ingredient: e.target.value })}
+                        aria-label={`Ingredient ${i + 1}`}
+                      >
+                        {!ingredientNames.includes(pour.ingredient) && pour.ingredient !== "" && (
+                          <option value={pour.ingredient}>{cap(pour.ingredient)} (unknown)</option>
+                        )}
+                        {pour.ingredient === "" && <option value="">Pick…</option>}
+                        {ingredientNames.map((n) => {
+                          const nStock = inventory?.ingredients[n];
+                          const nSlot = nStock?.slot ? slotLabel(nStock.slot) : null;
+                          return (
+                            <option key={n} value={n}>
+                              {cap(n)}
+                              {nSlot ? ` · ${nSlot}` : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    ) : (
+                      <input
+                        className={styles.input}
+                        type="text"
+                        value={pour.ingredient}
+                        onChange={(e) => updatePour(i, { ingredient: e.target.value })}
+                        placeholder="ingredient"
+                        aria-label={`Ingredient ${i + 1}`}
+                      />
+                    )}
+                    {tilts && <span className={styles.pourTilt}>{tilts}</span>}
+                    {!tilts && slot && <span className={styles.pourTilt}>Lives in {slot}</span>}
+                  </div>
+                  <input
+                    className={styles.input}
+                    type="number"
+                    min={0}
+                    step={0.25}
+                    value={pour.oz}
+                    onChange={(e) => updatePour(i, { oz: Math.max(0, Number(e.target.value)) })}
+                    aria-label={`Ounces for pour ${i + 1}`}
+                  />
+                  <button
+                    type="button"
+                    className={styles.rm}
+                    onClick={() => removePour(i)}
+                    disabled={pours.length === 1}
+                    aria-label={`Remove pour ${i + 1}`}
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
+
+            <div className={styles.pourAddRow}>
+              <button type="button" className={styles.btn} onClick={addPour}>
+                Add a pour
+              </button>
+              <span className={styles.pourTotal}>{fmtOz(totalOz)} oz in the glass</span>
+            </div>
+          </div>
         </div>
 
         <div className={styles.dlgBtns}>
           {existingIndex !== null && (
             <button
               type="button"
-              className={`${styles.btn} ${styles.btnDanger}`}
+              className={styles.btnDangerQuiet}
               onClick={onDelete}
               disabled={busy}
-              style={{ marginRight: "auto" }}
             >
-              Delete
+              Delete recipe…
             </button>
           )}
           <button type="button" className={styles.btn} onClick={onClose}>
