@@ -10,14 +10,24 @@ import (
 )
 
 type Recipe struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Pours     []Pour `json:"pours"`
-	OnMenu    bool   `json:"on_menu,omitempty"`
-	Image     string `json:"image,omitempty"`
-	Section   string `json:"section,omitempty"`
-	Tag       string `json:"tag,omitempty"`
-	SortOrder int    `json:"sort_order,omitempty"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Pours      []Pour `json:"pours"`
+	OnMenu     bool   `json:"on_menu,omitempty"`
+	Image      string `json:"image,omitempty"`
+	Section    string `json:"section,omitempty"`
+	Tag        string `json:"tag,omitempty"`
+	SortOrder  int    `json:"sort_order,omitempty"`
+	CrushedIce *bool  `json:"crushed_ice,omitempty"`
+	Shake      *bool  `json:"shake,omitempty"`
+	Strain     *bool  `json:"strain,omitempty"`
+}
+
+// stepEnabled returns true when a brew step should run. nil means the recipe
+// predates the steps feature; treat as enabled so existing recipes keep
+// behaving the same way.
+func stepEnabled(flag *bool) bool {
+	return flag == nil || *flag
 }
 
 type Pour struct {

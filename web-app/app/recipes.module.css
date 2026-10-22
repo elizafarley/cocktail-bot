@@ -455,6 +455,27 @@
 .pourTotal {
   font-size: 15px;
 }
+
+.stepsSection {
+  border-top: 1px solid var(--hair);
+  padding-top: 18px;
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stepsSection > .pourSectionTitle {
+  margin-bottom: 8px;
+}
+.stepRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  font-size: 16px;
+}
+
 .rm {
   height: 44px;
   border-radius: 12px;

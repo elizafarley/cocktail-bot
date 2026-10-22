@@ -7,6 +7,9 @@ export interface Recipe {
   section?: string;
   tag?: string;
   sort_order?: number;
+  crushed_ice?: boolean;
+  shake?: boolean;
+  strain?: boolean;
 }
 
 export const COMMON_RECIPE_SECTIONS = ["Classics", "Halloween specials"];
