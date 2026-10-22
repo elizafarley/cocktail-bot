@@ -400,6 +400,12 @@
   font-size: 13px;
   color: var(--smoke);
 }
+.panelEmpty {
+  color: var(--smoke);
+}
+.panelEmpty .panelTitle {
+  color: var(--smoke);
+}
 .segmented {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
