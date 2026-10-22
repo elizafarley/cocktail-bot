@@ -92,7 +92,10 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
           ) : recipes.length === 0 ? (
             <p className={styles.empty}>No recipes yet.</p>
           ) : (
-            recipes.map((recipe, i) => (
+            [...recipes]
+              .map((recipe, i) => ({ recipe, i }))
+              .sort((a, b) => a.recipe.name.localeCompare(b.recipe.name))
+              .map(({ recipe, i }) => (
               <section key={recipe.id || i} className={styles.recipe}>
                 <button
                   type="button"
@@ -118,13 +121,11 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
                     <span>#</span>
                     <span>Ingredient</span>
                     <span>Target</span>
-                    <span>Tolerance</span>
                   </div>
                   {recipe.pours.length === 0 ? (
                     <div className={`${styles.row} ${styles.muted}`}>
                       <span className={`${styles.num} ${styles.muted}`}>—</span>
                       <span>No pours</span>
-                      <span />
                       <span />
                     </div>
                   ) : (
@@ -133,9 +134,6 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
                         <span className={`${styles.num} ${styles.muted}`}>{j + 1}</span>
                         <span>{cap(p.ingredient)}</span>
                         <span className={styles.num}>{fmtOz(p.oz)} oz</span>
-                        <span className={`${styles.num} ${styles.muted}`}>
-                          {p.tol_oz != null && p.tol_oz > 0 ? `± ${fmtOz(p.tol_oz)} oz` : "—"}
-                        </span>
                       </div>
                     ))
                   )}
@@ -187,7 +185,7 @@ function RecipeEditor({
   const [onMenu, setOnMenu] = useState(initial.on_menu !== false);
   const [image, setImage] = useState(initial.image ?? "");
   const [pours, setPours] = useState<Pour[]>(
-    initial.pours.length > 0 ? initial.pours : [{ ingredient: ingredientNames[0] ?? "", oz: 1, tol_oz: 0.05 }],
+    initial.pours.length > 0 ? initial.pours : [{ ingredient: ingredientNames[0] ?? "", oz: 1 }],
   );
 
   function updatePour(i: number, patch: Partial<Pour>) {
@@ -199,7 +197,7 @@ function RecipeEditor({
   }
 
   function addPour() {
-    setPours((prev) => [...prev, { ingredient: ingredientNames[0] ?? "", oz: 1, tol_oz: 0.05 }]);
+    setPours((prev) => [...prev, { ingredient: ingredientNames[0] ?? "", oz: 1 }]);
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -318,17 +316,6 @@ function RecipeEditor({
                   step={0.25}
                   value={pour.oz}
                   onChange={(e) => updatePour(i, { oz: Math.max(0, Number(e.target.value)) })}
-                />
-              </label>
-              <label>
-                <span>± (oz)</span>
-                <input
-                  className={styles.input}
-                  type="number"
-                  min={0}
-                  step={0.05}
-                  value={pour.tol_oz ?? 0}
-                  onChange={(e) => updatePour(i, { tol_oz: Math.max(0, Number(e.target.value)) })}
                 />
               </label>
               <button

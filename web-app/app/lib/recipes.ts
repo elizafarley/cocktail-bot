@@ -25,7 +25,6 @@ export const DRINK_IMAGE_SLUGS = [
 export interface Pour {
   ingredient: string;
   oz: number;
-  tol_oz?: number;
 }
 
 export function recipeIngredients(recipe: Recipe): string[] {
