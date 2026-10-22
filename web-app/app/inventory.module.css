@@ -4,6 +4,7 @@
   --smoke: #6e6e73;
   --hair: #e8e8ed;
   --verm: #a3202c;
+  --blush: #fbedee;
   --tile: #f5f5f7;
   --ok: #1e8e3e;
   --bad: #c5221f;
@@ -24,6 +25,7 @@
     --smoke: #a1a1a6;
     --hair: #2c2c2e;
     --verm: #e5525e;
+    --blush: #2b1316;
     --tile: #1c1c1e;
     --ok: #34c759;
     --bad: #ff453a;
@@ -182,11 +184,29 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px 15px;
-  min-height: 160px;
+  padding: 13px 15px;
+  min-height: 132px;
   border: 1px solid var(--hair);
   border-radius: 14px;
   background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.rackCard:hover {
+  border-color: var(--smoke);
+}
+.rackCardSelected,
+.rackCardSelected:hover {
+  border: 2px solid var(--verm);
+  padding: 12px 14px;
+  background: var(--blush);
+}
+.rackCard:focus-visible {
+  outline: 2px solid var(--verm);
+  outline-offset: 2px;
 }
 .rackHead {
   display: flex;
@@ -228,13 +248,150 @@
   gap: 6px;
   font-size: 13px;
 }
-.rackCard .select {
-  height: 36px;
-  border-radius: 8px;
-  padding: 0 32px 0 10px;
-  background-position: right 10px center;
+.layout {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.layoutLeft {
+  flex: 3 1 560px;
+  min-width: 0;
+}
+.panel {
+  flex: 1 1 300px;
+  max-width: 100%;
+  border: 1px solid var(--hair);
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  position: sticky;
+  top: 24px;
+  background: var(--paper);
+}
+.panelHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.panelCrumb {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--smoke);
+}
+.panelTitle {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.panelStatus {
+  margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 14px;
-  margin-top: auto;
+}
+.panelClose {
+  background: none;
+  border: 0;
+  color: var(--smoke);
+  font-size: 18px;
+  padding: 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+.panelField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.panelLabel {
+  font-size: 14px;
+  font-weight: 600;
+}
+.panelHint {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--smoke);
+}
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 3px;
+  background: var(--tile);
+  border-radius: 12px;
+}
+.segment {
+  height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.segment:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.segmentActive {
+  background: var(--paper);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+.panelActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--hair);
+  padding-top: 20px;
+}
+.panelBtn,
+.panelBtnGhost,
+.panelBtnDanger {
+  height: 44px;
+  border-radius: 22px;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.panelBtn {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--hair);
+  font-weight: 500;
+}
+.panelBtn:hover:not(:disabled) {
+  border-color: var(--smoke);
+}
+.panelBtnGhost {
+  background: transparent;
+  color: var(--smoke);
+  border: 0;
+}
+.panelBtnGhost:hover:not(:disabled) {
+  color: var(--ink);
+}
+.panelBtnDanger {
+  background: transparent;
+  color: var(--verm);
+  border: 0;
+  font-size: 14px;
+}
+.panelBtn:disabled,
+.panelBtnGhost:disabled,
+.panelBtnDanger:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .name {

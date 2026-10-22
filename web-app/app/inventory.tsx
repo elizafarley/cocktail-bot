@@ -20,6 +20,7 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     getInventory(conn)
@@ -110,6 +111,9 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
   const noSlot = items.filter(([, s]) => !s.slot);
   const slots = inventory?.slots ?? [];
   const ingredientNames = items.map(([name]) => name);
+  const selectedSlot = selectedSlotId ? slots.find((s) => s.id === selectedSlotId) ?? null : null;
+  const selectedStock =
+    inventory && selectedSlot?.ingredient ? inventory.ingredients[selectedSlot.ingredient] : undefined;
 
   return (
     <>
@@ -145,26 +149,40 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
           {!inventory ? (
             <p className={styles.empty}>Loading…</p>
           ) : (
-            <>
-              {slots.length > 0 && (
-                <RackSection
-                  slots={slots}
-                  ingredients={inventory.ingredients}
+            <div className={styles.layout}>
+              <div className={styles.layoutLeft}>
+                {slots.length > 0 && (
+                  <RackSection
+                    slots={slots}
+                    ingredients={inventory.ingredients}
+                    selectedId={selectedSlotId}
+                    onSelect={(id) => setSelectedSlotId((prev) => (prev === id ? null : id))}
+                  />
+                )}
+                {items.length === 0 ? (
+                  <p className={styles.empty}>No ingredients yet. Add one above.</p>
+                ) : (
+                  <>
+                    <StockSection title="In stock" count={inStock.length} items={inStock} inStock busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
+                    <StockSection title="Out of stock" count={outOfStock.length} items={outOfStock} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
+                    <StockSection title="No slot" count={noSlot.length} items={noSlot} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
+                  </>
+                )}
+              </div>
+              {selectedSlot && (
+                <SlotPanel
+                  slot={selectedSlot}
+                  stock={selectedStock}
                   ingredientNames={ingredientNames}
                   busy={busy}
                   onAssign={assignSlot}
+                  onPourerOz={savePourerOz}
+                  onToggleStock={toggle}
+                  onDeleteIngredient={remove}
+                  onClose={() => setSelectedSlotId(null)}
                 />
               )}
-              {items.length === 0 ? (
-                <p className={styles.empty}>No ingredients yet. Add one above.</p>
-              ) : (
-                <>
-                  <StockSection title="In stock" count={inStock.length} items={inStock} inStock busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
-                  <StockSection title="Out of stock" count={outOfStock.length} items={outOfStock} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
-                  <StockSection title="No slot" count={noSlot.length} items={noSlot} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
-                </>
-              )}
-            </>
+            </div>
           )}
         </main>
       </div>
@@ -223,18 +241,18 @@ function parseSlotId(id: string): { letter: string; row: string } {
   return { letter, row };
 }
 
+const POURER_SIZES = [0.5, 1, 1.5] as const;
+
 function RackSection({
   slots,
   ingredients,
-  ingredientNames,
-  busy,
-  onAssign,
+  selectedId,
+  onSelect,
 }: {
   slots: Slot[];
   ingredients: IngredientRecord;
-  ingredientNames: string[];
-  busy: boolean;
-  onAssign: (slot: string, ingredient: string) => void;
+  selectedId: string | null;
+  onSelect: (slotId: string) => void;
 }) {
   const groups = new Map<string, Slot[]>();
   for (const slot of slots) {
@@ -263,9 +281,8 @@ function RackSection({
                 key={slot.id}
                 slot={slot}
                 stock={slot.ingredient ? ingredients[slot.ingredient] : undefined}
-                ingredientNames={ingredientNames}
-                busy={busy}
-                onAssign={onAssign}
+                selected={selectedId === slot.id}
+                onSelect={() => onSelect(slot.id)}
               />
             ))}
           </div>
@@ -278,15 +295,13 @@ function RackSection({
 function RackCard({
   slot,
   stock,
-  ingredientNames,
-  busy,
-  onAssign,
+  selected,
+  onSelect,
 }: {
   slot: Slot;
   stock: { in_stock: boolean; pourer_oz?: number } | undefined;
-  ingredientNames: string[];
-  busy: boolean;
-  onAssign: (slot: string, ingredient: string) => void;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   const { letter } = parseSlotId(slot.id);
   const hasBottle = Boolean(slot.ingredient);
@@ -295,11 +310,16 @@ function RackCard({
   const dotColor = !hasBottle ? "var(--smoke)" : inStock ? "var(--ok)" : "var(--bad)";
 
   return (
-    <div className={styles.rackCard}>
-      <div className={styles.rackHead}>
+    <button
+      type="button"
+      aria-pressed={selected}
+      className={`${styles.rackCard} ${selected ? styles.rackCardSelected : ""}`}
+      onClick={onSelect}
+    >
+      <span className={styles.rackHead}>
         <span className={styles.rackLetter}>{letter}</span>
         <span className={styles.rackSlotLabel}>Slot {letter}</span>
-      </div>
+      </span>
       <span className={styles.rackBottle}>{hasBottle ? titleCase(slot.ingredient!) : "Empty slot"}</span>
       {hasBottle && stock?.pourer_oz != null && (
         <span className={styles.rackPourer}>{stock.pourer_oz} oz pourer</span>
@@ -308,21 +328,134 @@ function RackCard({
         <span className={styles.dot} style={{ background: dotColor }} aria-hidden />
         {statusLabel}
       </span>
-      <select
-        className={styles.select}
-        value={slot.ingredient ?? ""}
-        onChange={(e) => onAssign(slot.id, e.target.value)}
-        disabled={busy}
-        aria-label={`Bottle in slot ${letter}`}
-      >
-        <option value="">— empty —</option>
-        {ingredientNames.map((n) => (
-          <option key={n} value={n}>
-            {titleCase(n)}
-          </option>
-        ))}
-      </select>
-    </div>
+    </button>
+  );
+}
+
+function SlotPanel({
+  slot,
+  stock,
+  ingredientNames,
+  busy,
+  onAssign,
+  onPourerOz,
+  onToggleStock,
+  onDeleteIngredient,
+  onClose,
+}: {
+  slot: Slot;
+  stock: { in_stock: boolean; pourer_oz?: number } | undefined;
+  ingredientNames: string[];
+  busy: boolean;
+  onAssign: (slot: string, ingredient: string) => void;
+  onPourerOz: (ingredient: string, oz: number) => void;
+  onToggleStock: (ingredient: string, nextInStock: boolean) => void;
+  onDeleteIngredient: (ingredient: string) => void;
+  onClose: () => void;
+}) {
+  const { letter, row } = parseSlotId(slot.id);
+  const bottle = slot.ingredient;
+  const hasBottle = Boolean(bottle);
+  const inStock = Boolean(hasBottle && stock?.in_stock);
+  const pourerOz = stock?.pourer_oz;
+
+  return (
+    <aside className={styles.panel} aria-label={`Slot ${letter}`}>
+      <div className={styles.panelHead}>
+        <div>
+          <p className={styles.panelCrumb}>
+            Slot {letter}
+            {row ? ` · ${titleCase(row)}` : ""}
+          </p>
+          <h2 className={styles.panelTitle}>{hasBottle ? titleCase(bottle!) : "Empty slot"}</h2>
+          {hasBottle && (
+            <p className={styles.panelStatus}>
+              <span
+                className={styles.dot}
+                style={{ background: inStock ? "var(--ok)" : "var(--bad)" }}
+                aria-hidden
+              />
+              {inStock ? "In stock" : "Out of stock"}
+            </p>
+          )}
+        </div>
+        <button type="button" className={styles.panelClose} onClick={onClose} aria-label="Close">
+          ✕
+        </button>
+      </div>
+
+      <label className={styles.panelField}>
+        <span className={styles.panelLabel}>Bottle in this slot</span>
+        <select
+          className={styles.select}
+          value={bottle ?? ""}
+          onChange={(e) => onAssign(slot.id, e.target.value)}
+          disabled={busy}
+        >
+          <option value="">— empty —</option>
+          {ingredientNames.map((n) => (
+            <option key={n} value={n}>
+              {titleCase(n)}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {hasBottle && (
+        <fieldset className={styles.panelField}>
+          <legend className={styles.panelLabel}>Pourer</legend>
+          <div className={styles.segmented}>
+            {POURER_SIZES.map((oz) => {
+              const active = pourerOz === oz;
+              return (
+                <button
+                  key={oz}
+                  type="button"
+                  aria-pressed={active}
+                  className={`${styles.segment} ${active ? styles.segmentActive : ""}`}
+                  onClick={() => onPourerOz(bottle!, oz)}
+                  disabled={busy}
+                >
+                  {oz} oz
+                </button>
+              );
+            })}
+          </div>
+          {pourerOz != null && !POURER_SIZES.includes(pourerOz as typeof POURER_SIZES[number]) && (
+            <p className={styles.panelHint}>Currently set to {pourerOz} oz.</p>
+          )}
+        </fieldset>
+      )}
+
+      {hasBottle && (
+        <div className={styles.panelActions}>
+          <button
+            type="button"
+            className={styles.panelBtn}
+            onClick={() => onToggleStock(bottle!, !inStock)}
+            disabled={busy}
+          >
+            Mark {inStock ? "out of stock" : "in stock"}
+          </button>
+          <button
+            type="button"
+            className={styles.panelBtnGhost}
+            onClick={() => onAssign(slot.id, "")}
+            disabled={busy}
+          >
+            Clear slot
+          </button>
+          <button
+            type="button"
+            className={styles.panelBtnDanger}
+            onClick={() => onDeleteIngredient(bottle!)}
+            disabled={busy}
+          >
+            Delete ingredient…
+          </button>
+        </div>
+      )}
+    </aside>
   );
 }
 
