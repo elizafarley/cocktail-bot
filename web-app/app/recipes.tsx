@@ -1,13 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ViamConnection } from "./lib/viamClient";
-import { getBottles, getRecipes, updateRecipes } from "./lib/viamClient";
+import { getBottles, getInventory, getRecipes, updateRecipes } from "./lib/viamClient";
 import type { Pour, Recipe } from "./lib/recipes";
 import { COMMON_RECIPE_SECTIONS, COMMON_RECIPE_TAGS, DRINK_IMAGE_SLUGS } from "./lib/recipes";
+import type { Inventory } from "./lib/inventory";
+import { isAvailable } from "./lib/inventory";
 import { Nav } from "./nav";
 import { titleCase as cap } from "./lib/display";
 import styles from "./recipes.module.css";
+
+const DEFAULT_SECTION = "Other";
 
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -17,18 +21,73 @@ function fmtOz(v: number): string {
   return (Math.round(v * 100) / 100).toString();
 }
 
+type SectionGroup = {
+  section: string;
+  items: { recipe: Recipe; index: number }[];
+};
+
+function orderOf(recipe: Recipe): number {
+  return recipe.sort_order ?? Number.POSITIVE_INFINITY;
+}
+
+function groupRecipesBySection(recipes: Recipe[]): SectionGroup[] {
+  const groups = new Map<string, { recipe: Recipe; index: number }[]>();
+  recipes.forEach((recipe, index) => {
+    const section = recipe.section?.trim() || DEFAULT_SECTION;
+    const list = groups.get(section) ?? [];
+    list.push({ recipe, index });
+    groups.set(section, list);
+  });
+  for (const list of groups.values()) {
+    list.sort((a, b) => {
+      const oa = orderOf(a.recipe);
+      const ob = orderOf(b.recipe);
+      if (oa !== ob) return oa - ob;
+      return a.recipe.name.localeCompare(b.recipe.name);
+    });
+  }
+  return [...groups.entries()]
+    .sort(([aSection, aList], [bSection, bList]) => {
+      if (aSection === DEFAULT_SECTION && bSection !== DEFAULT_SECTION) return 1;
+      if (bSection === DEFAULT_SECTION && aSection !== DEFAULT_SECTION) return -1;
+      const aMin = Math.min(...aList.map((x) => orderOf(x.recipe)));
+      const bMin = Math.min(...bList.map((x) => orderOf(x.recipe)));
+      if (aMin !== bMin) return aMin - bMin;
+      return aSection.localeCompare(bSection);
+    })
+    .map(([section, items]) => ({ section, items }));
+}
+
+type RecipeStatus =
+  | { kind: "loading" }
+  | { kind: "off_menu" }
+  | { kind: "ready" }
+  | { kind: "missing"; ingredient: string };
+
+function recipeStatus(recipe: Recipe, inventory: Inventory | null): RecipeStatus {
+  if (recipe.on_menu === false) return { kind: "off_menu" };
+  if (!inventory) return { kind: "loading" };
+  for (const pour of recipe.pours) {
+    const stock = inventory.ingredients[pour.ingredient];
+    if (!stock || !stock.in_stock) return { kind: "missing", ingredient: pour.ingredient };
+  }
+  return { kind: "ready" };
+}
+
 export function RecipesPage({ conn }: { conn: ViamConnection }) {
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [bottles, setBottles] = useState<string[]>([]);
+  const [inventory, setInventory] = useState<Inventory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ index: number | null; recipe: Recipe } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
-    Promise.all([getRecipes(conn), getBottles(conn)])
-      .then(([r, b]) => {
+    Promise.all([getRecipes(conn), getBottles(conn), getInventory(conn)])
+      .then(([r, b, inv]) => {
         setRecipes(r);
         setBottles(b);
+        setInventory(inv);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   }, [conn]);
@@ -69,13 +128,27 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
 
   const ingredientNames = bottles;
 
+  const sections = useMemo(() => groupRecipesBySection(recipes ?? []), [recipes]);
+  const readyCount = useMemo(() => {
+    if (!recipes || !inventory) return 0;
+    return recipes.filter((r) => isAvailable(r, inventory)).length;
+  }, [recipes, inventory]);
+
   return (
     <>
       <Nav current="recipes" />
       <div className={styles.scope}>
         <main className={styles.page}>
           <div className={styles.toolbar}>
-            <h1 className={styles.pageTitle}>Recipes</h1>
+            <div className={styles.toolbarTitle}>
+              <h1 className={styles.pageTitle}>Recipes</h1>
+              {recipes && (
+                <p className={styles.toolbarMeta}>
+                  {recipes.length} recipe{recipes.length === 1 ? "" : "s"}
+                  {inventory ? ` · ${readyCount} ready to make` : ""}
+                </p>
+              )}
+            </div>
             <button
               type="button"
               className={`${styles.btn} ${styles.btnMain}`}
@@ -92,52 +165,18 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
           ) : recipes.length === 0 ? (
             <p className={styles.empty}>No recipes yet.</p>
           ) : (
-            [...recipes]
-              .map((recipe, i) => ({ recipe, i }))
-              .sort((a, b) => a.recipe.name.localeCompare(b.recipe.name))
-              .map(({ recipe, i }) => (
-              <section key={recipe.id || i} className={styles.recipe}>
-                <button
-                  type="button"
-                  className={styles.rhead}
-                  onClick={() => setEditing({ index: i, recipe: structuredClone(recipe) })}
-                >
-                  <div className={styles.rheadTitle}>
-                    {recipe.section && <span className={styles.rheadSection}>{recipe.section}</span>}
-                    <div className={styles.rheadName}>
-                      <h2>{recipe.name || recipe.id || "(unnamed)"}</h2>
-                      {recipe.tag && <span className={styles.tagBadge}>{recipe.tag}</span>}
-                    </div>
-                  </div>
-                  {recipe.on_menu !== false ? (
-                    <span className={styles.st}>
-                      <i style={{ background: "var(--ok)" }} />
-                      On the menu
-                    </span>
-                  ) : (
-                    <span className={`${styles.st} ${styles.muted}`}>
-                      <i style={{ background: "var(--smoke)" }} />
-                      Off the menu
-                    </span>
-                  )}
-                  <span className={styles.chev}>›</span>
-                </button>
-                <div className={`${styles.rows} ${styles.ing}`}>
-                  {recipe.pours.length === 0 ? (
-                    <div className={`${styles.row} ${styles.muted}`}>
-                      <span className={`${styles.num} ${styles.muted}`}>—</span>
-                      <span>No pours</span>
-                      <span />
-                    </div>
-                  ) : (
-                    recipe.pours.map((p, j) => (
-                      <div key={j} className={styles.row}>
-                        <span className={`${styles.num} ${styles.muted}`}>{j + 1}</span>
-                        <span>{cap(p.ingredient)}</span>
-                        <span className={styles.num}>{fmtOz(p.oz)} oz</span>
-                      </div>
-                    ))
-                  )}
+            sections.map(({ section, items }) => (
+              <section key={section} className={styles.recipeSection} aria-label={section}>
+                <h2 className={styles.recipeSectionTitle}>{section}</h2>
+                <div className={styles.recipeGrid}>
+                  {items.map(({ recipe, index }) => (
+                    <RecipeCard
+                      key={recipe.id || index}
+                      recipe={recipe}
+                      status={recipeStatus(recipe, inventory)}
+                      onClick={() => setEditing({ index, recipe: structuredClone(recipe) })}
+                    />
+                  ))}
                 </div>
               </section>
             ))
@@ -160,6 +199,95 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
         />
       )}
     </>
+  );
+}
+
+function RecipeArt({ slug, name }: { slug?: string; name: string }) {
+  if (!slug) return <div className={styles.recipeArt} aria-hidden />;
+  return (
+    <div className={styles.recipeArt}>
+      <picture>
+        <source srcSet={`/drinks/png/dark/${slug}.png`} media="(prefers-color-scheme: dark)" />
+        <img src={`/drinks/png/light/${slug}.png`} alt="" width={74} height={74} aria-label={name} />
+      </picture>
+    </div>
+  );
+}
+
+function RecipeCard({
+  recipe,
+  status,
+  onClick,
+}: {
+  recipe: Recipe;
+  status: RecipeStatus;
+  onClick: () => void;
+}) {
+  const pours = recipe.pours
+    .map((p) => `${fmtOz(p.oz)} oz ${cap(p.ingredient)}`)
+    .join(" · ");
+  return (
+    <button type="button" className={styles.recipeCard} onClick={onClick}>
+      <RecipeArt slug={recipe.image} name={recipe.name || recipe.id} />
+      <span className={styles.recipeBody}>
+        <span className={styles.recipeNameRow}>
+          <span className={styles.recipeName}>{recipe.name || recipe.id || "(unnamed)"}</span>
+          {recipe.tag && <span className={styles.tagBadge}>{recipe.tag}</span>}
+        </span>
+        <span className={styles.recipePours}>{pours || "No pours"}</span>
+        <RecipeStatusLine status={status} />
+      </span>
+      <span className={styles.recipeChev} aria-hidden>
+        ›
+      </span>
+    </button>
+  );
+}
+
+function RecipeStatusLine({ status }: { status: RecipeStatus }) {
+  if (status.kind === "off_menu") {
+    return (
+      <span className={`${styles.recipeStatus} ${styles.recipeStatusMuted}`}>
+        <span className={styles.statusDot} style={{ background: "var(--smoke)" }} aria-hidden />
+        Off the menu
+      </span>
+    );
+  }
+  if (status.kind === "loading") {
+    return (
+      <span className={`${styles.recipeStatus} ${styles.recipeStatusMuted}`}>
+        <span className={styles.statusDot} style={{ background: "var(--smoke)" }} aria-hidden />
+        On the menu
+      </span>
+    );
+  }
+  if (status.kind === "ready") {
+    return (
+      <span className={styles.recipeStatus}>
+        <span className={styles.statusDot} style={{ background: "var(--ok)" }} aria-hidden />
+        On the menu · ready to make
+      </span>
+    );
+  }
+  return (
+    <span className={`${styles.recipeStatus} ${styles.recipeStatusWarn}`}>
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M12 3l9.5 17h-19z" />
+        <path d="M12 10v4" />
+        <path d="M12 17.5v.5" />
+      </svg>
+      On the menu · can&rsquo;t make: {cap(status.ingredient)} not on the rack
+    </span>
   );
 }
 
