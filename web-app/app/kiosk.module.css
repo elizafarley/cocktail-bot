@@ -113,8 +113,8 @@
 }
 .menu {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 18px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -175,11 +175,11 @@
 .drink {
   border: 1px solid var(--hair);
   border-radius: 20px;
-  padding: 28px;
+  padding: 14px;
   text-align: left;
-  min-height: 380px;
   display: flex;
   flex-direction: column;
+  gap: 10px;
   background: var(--paper);
   color: inherit;
   font: inherit;
@@ -200,8 +200,8 @@
   opacity: 0.6;
 }
 .art {
-  height: 200px;
-  padding: 20px;
+  height: 168px;
+  padding: 16px;
   border-radius: 14px;
   background: var(--tile);
   display: flex;
@@ -220,10 +220,10 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 22px;
+  padding: 2px 6px 0;
 }
 .drink h3 {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.015em;
   margin: 0;
@@ -239,7 +239,8 @@
   flex: 0 0 auto;
 }
 .ingLine {
-  margin: 6px 0 0;
+  margin: 0;
+  padding: 0 6px 6px;
   color: var(--smoke);
   font-size: 15px;
 }
