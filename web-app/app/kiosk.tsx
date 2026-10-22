@@ -31,7 +31,7 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   const [inventory, setInventory] = useState<Inventory | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderState>({ kind: "idle" });
-  const [confirming, setConfirming] = useState<Recipe | null>(null);
+  const [confirming, setConfirming] = useState<{ recipe: Recipe; orderable: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,7 +114,7 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
                   recipes={visible}
                   inventory={inventory}
                   disabled={order.kind === "running"}
-                  onPick={setConfirming}
+                  onPick={(recipe, orderable) => setConfirming({ recipe, orderable })}
                 />
               )}
             </div>
@@ -125,10 +125,11 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
 
         {confirming && (
           <ConfirmOrder
-            recipe={confirming}
+            recipe={confirming.recipe}
+            orderable={confirming.orderable}
             onCancel={() => setConfirming(null)}
             onConfirm={() => {
-              const picked = confirming;
+              const picked = confirming.recipe;
               setConfirming(null);
               startOrder(picked);
             }}
@@ -164,7 +165,7 @@ function DrinkGrid({
   recipes: Recipe[];
   inventory: Inventory;
   disabled: boolean;
-  onPick: (recipe: Recipe) => void;
+  onPick: (recipe: Recipe, orderable: boolean) => void;
 }) {
   const sorted = [...recipes].sort((a, b) => {
     const aAvail = isAvailable(a, inventory);
@@ -181,8 +182,8 @@ function DrinkGrid({
             <button
               type="button"
               className={`${styles.drink} ${!available ? styles.out : ""}`}
-              onClick={() => onPick(recipe)}
-              disabled={disabled || !available}
+              onClick={() => onPick(recipe, available)}
+              disabled={disabled}
             >
               <DrinkArt slug={recipe.image} name={recipe.name} />
               <h2>{recipe.name}</h2>
@@ -197,10 +198,12 @@ function DrinkGrid({
 
 function ConfirmOrder({
   recipe,
+  orderable,
   onCancel,
   onConfirm,
 }: {
   recipe: Recipe;
+  orderable: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -216,11 +219,17 @@ function ConfirmOrder({
             </li>
           ))}
         </ul>
+        {!orderable && <p className={styles.outNote}>Out of stock</p>}
         <div className={styles.btns}>
           <button type="button" className={styles.btn} onClick={onCancel}>
             Back
           </button>
-          <button type="button" className={`${styles.btn} ${styles.btnMain}`} onClick={onConfirm}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnMain}`}
+            onClick={onConfirm}
+            disabled={!orderable}
+          >
             Order
           </button>
         </div>
