@@ -183,7 +183,7 @@
 
 .tableHead {
   display: grid;
-  grid-template-columns: 1.4fr 1.2fr 0.8fr 1.6fr 32px;
+  grid-template-columns: 1.4fr 1.2fr 0.8fr 1.6fr;
   gap: 12px;
   padding: 0 4px 8px;
   font-size: 13px;
@@ -203,7 +203,7 @@
 }
 .tableRow {
   display: grid;
-  grid-template-columns: 1.4fr 1.2fr 0.8fr 1.6fr 32px;
+  grid-template-columns: 1.4fr 1.2fr 0.8fr 1.6fr;
   gap: 12px;
   align-items: center;
   padding: 12px 4px;

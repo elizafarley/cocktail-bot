@@ -205,10 +205,8 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                     usedIn={usedIn}
                     filter={filter}
                     onFilter={setFilter}
-                    busy={busy}
                     selectedName={activeIngredient ?? (selectedSlot?.ingredient ?? null)}
                     onPick={pickIngredient}
-                    onDelete={remove}
                   />
                 )}
               </div>
@@ -623,19 +621,15 @@ function AllIngredientsSection({
   usedIn,
   filter,
   onFilter,
-  busy,
   selectedName,
   onPick,
-  onDelete,
 }: {
   items: IngredientEntry[];
   usedIn: Map<string, string[]>;
   filter: string;
   onFilter: (next: string) => void;
-  busy: boolean;
   selectedName: string | null;
   onPick: (name: string) => void;
-  onDelete: (name: string) => void;
 }) {
   const counts = new Map<string, number>();
   for (const [, stock] of items) {
@@ -685,7 +679,6 @@ function AllIngredientsSection({
         <span>Status</span>
         <span>Pourer</span>
         <span>Used in</span>
-        <span />
       </div>
 
       {orderedCats.map((cat) => (
@@ -697,10 +690,8 @@ function AllIngredientsSection({
               name={name}
               stock={stock}
               recipeNames={usedIn.get(name) ?? []}
-              busy={busy}
               selected={selectedName === name}
               onPick={onPick}
-              onDelete={onDelete}
             />
           ))}
         </div>
@@ -736,18 +727,14 @@ function IngredientRow({
   name,
   stock,
   recipeNames,
-  busy,
   selected,
   onPick,
-  onDelete,
 }: {
   name: string;
   stock: { in_stock: boolean; slot?: string; pourer_oz?: number };
   recipeNames: string[];
-  busy: boolean;
   selected: boolean;
   onPick: (name: string) => void;
-  onDelete: (name: string) => void;
 }) {
   let dotColor = "transparent";
   let statusLabel: string;
@@ -786,19 +773,6 @@ function IngredientRow({
       </span>
       <span className={styles.rowPourer}>{stock.pourer_oz != null ? `${stock.pourer_oz} oz` : "—"}</span>
       <span className={styles.rowUsed}>{recipeNames.length > 0 ? recipeNames.join(", ") : "—"}</span>
-      <button
-        type="button"
-        className={styles.btnIcon}
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(name);
-        }}
-        disabled={busy}
-        aria-label={`Delete ${name}`}
-        title="Delete"
-      >
-        ✕
-      </button>
     </div>
   );
 }
