@@ -161,8 +161,80 @@
 .rowStock {
   grid-template-columns: 24px minmax(0, 1fr) 180px 92px 160px 36px;
 }
-.rowSlot {
-  grid-template-columns: 24px 160px minmax(0, 1fr);
+
+.rackGroup + .rackGroup {
+  margin-top: 24px;
+}
+.rowLabel {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--smoke);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rack {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+}
+.rackCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 15px;
+  min-height: 160px;
+  border: 1px solid var(--hair);
+  border-radius: 14px;
+  background: var(--paper);
+}
+.rackHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--smoke);
+}
+.rackLetter {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--tile);
+  color: var(--ink);
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+.rackSlotLabel {
+  font-variant-numeric: tabular-nums;
+}
+.rackBottle {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rackPourer {
+  font-size: 13px;
+  color: var(--smoke);
+}
+.rackStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.rackCard .select {
+  height: 36px;
+  border-radius: 8px;
+  padding: 0 32px 0 10px;
+  background-position: right 10px center;
+  font-size: 14px;
+  margin-top: auto;
 }
 
 .name {
