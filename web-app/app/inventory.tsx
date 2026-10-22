@@ -509,37 +509,26 @@ function CategoryField({
   busy: boolean;
   onSave: (ingredient: string, category: string) => void;
 }) {
-  const [value, setValue] = useState(initial);
-  const datalistId = `cat-list-${ingredient}`;
-
-  function commit() {
-    const next = value.trim();
-    if (next === initial.trim()) return;
-    onSave(ingredient, next);
-  }
-
+  const options =
+    initial && !COMMON_CATEGORIES.includes(initial) ? [initial, ...COMMON_CATEGORIES] : COMMON_CATEGORIES;
   return (
     <label className={styles.panelField}>
       <span className={styles.panelLabel}>Category</span>
-      <input
-        key={`${ingredient}:${initial}`}
-        type="text"
-        list={datalistId}
-        className={styles.input}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      <select
+        className={styles.select}
+        value={initial}
+        onChange={(e) => {
+          if (e.target.value !== initial) onSave(ingredient, e.target.value);
         }}
         disabled={busy}
-        placeholder="e.g. Spirits"
-      />
-      <datalist id={datalistId}>
-        {COMMON_CATEGORIES.map((c) => (
-          <option key={c} value={c} />
+      >
+        <option value="">— None —</option>
+        {options.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
         ))}
-      </datalist>
+      </select>
     </label>
   );
 }
