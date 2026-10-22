@@ -20,8 +20,8 @@ import styles from "./kiosk.module.css";
 
 type OrderState =
   | { kind: "idle" }
-  | { kind: "running"; recipe: Recipe; customerName?: string; quantity: number }
-  | { kind: "done"; recipe: Recipe; at: number; customerName?: string; quantity: number }
+  | { kind: "running"; recipe: Recipe }
+  | { kind: "done"; recipe: Recipe; at: number }
   | { kind: "error"; recipe: Recipe; message: string };
 
 const READY_CARD_MS = 60_000;
@@ -58,12 +58,11 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   }, [conn]);
 
   const startOrder = useCallback(
-    async (recipe: Recipe, quantity: number, customerName?: string) => {
-      const name = customerName?.trim() || undefined;
-      setOrder({ kind: "running", recipe, customerName: name, quantity });
+    async (recipe: Recipe) => {
+      setOrder({ kind: "running", recipe });
       try {
-        await makeCocktail(conn, recipe.id, quantity);
-        setOrder({ kind: "done", recipe, at: Date.now(), customerName: name, quantity });
+        await makeCocktail(conn, recipe.id);
+        setOrder({ kind: "done", recipe, at: Date.now() });
       } catch (err) {
         setOrder({
           kind: "error",
@@ -142,10 +141,10 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
             recipe={confirming.recipe}
             orderable={confirming.orderable}
             onCancel={() => setConfirming(null)}
-            onConfirm={(quantity, customerName) => {
+            onConfirm={() => {
               const picked = confirming.recipe;
               setConfirming(null);
-              startOrder(picked, quantity, customerName);
+              startOrder(picked);
             }}
           />
         )}
@@ -158,10 +157,6 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   );
 }
 
-function orderQuantityLabel(name: string, quantity: number): string {
-  return quantity > 1 ? `${name} × ${quantity}` : name;
-}
-
 function StatusPill({ order, connected }: { order: OrderState; connected: boolean }) {
   let dotColor = "var(--ok)";
   let text: string;
@@ -170,12 +165,10 @@ function StatusPill({ order, connected }: { order: OrderState; connected: boolea
     text = "Reconnecting…";
   } else if (order.kind === "running") {
     dotColor = "var(--verm)";
-    const label = orderQuantityLabel(order.recipe.name, order.quantity);
-    text = order.customerName ? `Making ${label} for ${order.customerName}` : `Making ${label}`;
+    text = `Making ${order.recipe.name}`;
   } else if (order.kind === "done") {
     dotColor = "var(--ok)";
-    const label = orderQuantityLabel(order.recipe.name, order.quantity);
-    text = order.customerName ? `${label} is ready for ${order.customerName}` : `${label} is ready`;
+    text = `${order.recipe.name} is ready`;
   } else if (order.kind === "error") {
     dotColor = "var(--bad)";
     text = `${order.recipe.name} needs help`;
@@ -348,8 +341,6 @@ function DrinkCard({
   );
 }
 
-const MAX_QUANTITY = 4;
-
 function OrderSheet({
   recipe,
   orderable,
@@ -359,13 +350,8 @@ function OrderSheet({
   recipe: Recipe;
   orderable: boolean;
   onCancel: () => void;
-  onConfirm: (quantity: number, customerName: string) => void;
+  onConfirm: () => void;
 }) {
-  const [customerName, setCustomerName] = useState("");
-  const [quantity, setQuantity] = useState(1);
-  const decrement = () => setQuantity((q) => Math.max(1, q - 1));
-  const increment = () => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1));
-
   return (
     <div className={styles.scrim} onClick={onCancel}>
       <div className={`${styles.sheet} ${styles.sheetWide}`} onClick={(e) => e.stopPropagation()}>
@@ -382,47 +368,6 @@ function OrderSheet({
           ))}
         </ul>
         {!orderable && <p className={styles.outNote}>Out of stock</p>}
-        {orderable && (
-          <div className={styles.sheetFields}>
-            <label className={styles.sheetField}>
-              <span>
-                Name for your order <span className={styles.sheetFieldHint}>(optional)</span>
-              </span>
-              <input
-                type="text"
-                className={styles.sheetInput}
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="So we can call it out"
-                maxLength={40}
-              />
-            </label>
-            <div className={styles.sheetField}>
-              <span id="qty-label">How many</span>
-              <div className={styles.stepper} role="group" aria-labelledby="qty-label">
-                <button
-                  type="button"
-                  className={styles.stepperBtn}
-                  onClick={decrement}
-                  disabled={quantity <= 1}
-                  aria-label="One fewer"
-                >
-                  −
-                </button>
-                <span className={styles.stepperValue}>{quantity}</span>
-                <button
-                  type="button"
-                  className={`${styles.stepperBtn} ${styles.stepperBtnActive}`}
-                  onClick={increment}
-                  disabled={quantity >= MAX_QUANTITY}
-                  aria-label="One more"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
         <div className={styles.btns}>
           <button type="button" className={`${styles.btn} ${styles.btnBig}`} onClick={onCancel}>
             Back
@@ -430,7 +375,7 @@ function OrderSheet({
           <button
             type="button"
             className={`${styles.btn} ${styles.btnBig} ${styles.btnMain}`}
-            onClick={() => onConfirm(quantity, customerName)}
+            onClick={onConfirm}
             disabled={!orderable}
           >
             Order
