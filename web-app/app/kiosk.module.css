@@ -41,6 +41,46 @@
   display: flex;
   flex-direction: column;
 }
+.mainKiosk {
+  padding-top: 28px;
+}
+
+.kioskHeader {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 64px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.wordmark {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--tile);
+  border-radius: 20px;
+  padding: 10px 16px;
+  font-size: 15px;
+  color: var(--ink);
+}
+.statusDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 5px;
+}
+
+@media (max-width: 900px) {
+  .kioskHeader {
+    padding: 20px 24px 0;
+  }
+}
 
 .title {
   font-size: 48px;

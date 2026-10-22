@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { ViamConnection } from "./lib/viamClient";
 import {
   getInventory,
@@ -24,8 +25,11 @@ type OrderState =
   | { kind: "error"; recipe: Recipe; message: string };
 
 const READY_CARD_MS = 60_000;
+const MINUTES_PER_DRINK = 3;
 
 export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: boolean }) {
+  const params = useSearchParams();
+  const kioskMode = params.get("kiosk") === "1";
   const [machineName, setMachineName] = useState<string>("");
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [inventory, setInventory] = useState<Inventory | null>(null);
@@ -82,15 +86,38 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
 
   const visible = recipes ? recipes.filter((r) => r.on_menu !== false) : [];
 
+  const menu = loadError ? (
+    <p className={styles.sub}>Could not load menu: {loadError}</p>
+  ) : !recipes || !inventory ? (
+    <p className={styles.loading}>Loading menu…</p>
+  ) : recipes.length === 0 ? (
+    <p className={styles.loading}>No recipes configured.</p>
+  ) : visible.length === 0 ? (
+    <p className={styles.loading}>No drinks on the menu right now.</p>
+  ) : (
+    <DrinkMenu
+      recipes={visible}
+      inventory={inventory}
+      disabled={order.kind === "running"}
+      onPick={(recipe, orderable) => setConfirming({ recipe, orderable })}
+    />
+  );
+
   return (
     <>
-      <Nav current="kiosk" />
+      {!kioskMode && <Nav current="kiosk" />}
       <div className={styles.scope}>
-        <main className={styles.main}>
+        {kioskMode && (
+          <header className={styles.kioskHeader}>
+            <span className={styles.wordmark}>Cocktail Bot</span>
+            <StatusPill order={order} connected={connected} />
+          </header>
+        )}
+        <main className={`${styles.main} ${kioskMode ? styles.mainKiosk : ""}`}>
           <h1 className={styles.title}>What can we make you?</h1>
           <p className={styles.sub}>
-            Tap a drink to see what&rsquo;s in it.
-            {!connected && (
+            {kioskMode ? "Tap a drink to order." : "Tap a drink to see what’s in it."}
+            {!connected && !kioskMode && (
               <span className={styles.warn}>
                 {" · reconnecting to "}
                 {machineName || conn.hostname}
@@ -99,28 +126,14 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
             {conn.isDev && " · dev mock"}
           </p>
 
-          <div className={styles.kBody}>
-            <div className={styles.menuWrap}>
-              {loadError ? (
-                <p className={styles.sub}>Could not load menu: {loadError}</p>
-              ) : !recipes || !inventory ? (
-                <p className={styles.loading}>Loading menu…</p>
-              ) : recipes.length === 0 ? (
-                <p className={styles.loading}>No recipes configured.</p>
-              ) : visible.length === 0 ? (
-                <p className={styles.loading}>No drinks on the menu right now.</p>
-              ) : (
-                <DrinkMenu
-                  recipes={visible}
-                  inventory={inventory}
-                  disabled={order.kind === "running"}
-                  onPick={(recipe, orderable) => setConfirming({ recipe, orderable })}
-                />
-              )}
+          {kioskMode ? (
+            menu
+          ) : (
+            <div className={styles.kBody}>
+              <div className={styles.menuWrap}>{menu}</div>
+              <KioskQueue conn={conn} order={order} />
             </div>
-
-            <KioskQueue conn={conn} order={order} />
-          </div>
+          )}
         </main>
 
         {confirming && (
@@ -141,6 +154,32 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
         )}
       </div>
     </>
+  );
+}
+
+function StatusPill({ order, connected }: { order: OrderState; connected: boolean }) {
+  let dotColor = "var(--ok)";
+  let text: string;
+  if (!connected) {
+    dotColor = "var(--bad)";
+    text = "Reconnecting…";
+  } else if (order.kind === "running") {
+    dotColor = "var(--verm)";
+    text = `Making ${order.recipe.name}`;
+  } else if (order.kind === "done") {
+    dotColor = "var(--ok)";
+    text = `${order.recipe.name} is ready`;
+  } else if (order.kind === "error") {
+    dotColor = "var(--bad)";
+    text = `${order.recipe.name} needs help`;
+  } else {
+    text = `Nobody in line · about ${MINUTES_PER_DRINK} min per drink`;
+  }
+  return (
+    <span className={styles.statusPill}>
+      <span className={styles.statusDot} style={{ background: dotColor }} aria-hidden />
+      {text}
+    </span>
   );
 }
 
