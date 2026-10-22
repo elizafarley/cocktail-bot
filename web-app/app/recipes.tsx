@@ -1,6 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { ViamConnection } from "./lib/viamClient";
 import { getBottles, getInventory, getRecipes, updateRecipes } from "./lib/viamClient";
 import type { Recipe } from "./lib/recipes";
@@ -11,6 +21,8 @@ import { isAvailable } from "./lib/inventory";
 import { Nav } from "./nav";
 import { titleCase as cap } from "./lib/display";
 import styles from "./recipes.module.css";
+
+type IdStep = { id: string; step: RecipeStep };
 
 const DEFAULT_SECTION = "Other";
 
@@ -308,56 +320,46 @@ function tiltsLine(oz: number, pourerOz: number | undefined): string | null {
   return `${rounded} tilt${rounded === 1 ? "" : "s"} of the ${fmtOz(pourerOz)} oz pourer`;
 }
 
-function StepRow({
+function SortableStepRow({
+  id,
   index,
   step,
-  total,
   ingredientNames,
   inventory,
   onUpdate,
   onRemove,
-  onMove,
 }: {
+  id: string;
   index: number;
   step: RecipeStep;
-  total: number;
   ingredientNames: string[];
   inventory: Inventory | null;
   onUpdate: (patch: Partial<RecipeStep>) => void;
   onRemove: () => void;
-  onMove: (dir: -1 | 1) => void;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
   return (
-    <div className={styles.pourRow}>
-      <span className={styles.pourIndex}>{index + 1}</span>
+    <div ref={setNodeRef} style={style} className={styles.pourRow}>
+      <span
+        className={styles.stepGrip}
+        aria-label={`Reorder step ${index + 1}`}
+        title="Drag to reorder"
+        {...attributes}
+        {...listeners}
+      >
+        ⠿
+      </span>
       <div className={styles.pourMain}>
         <StepBody step={step} ingredientNames={ingredientNames} inventory={inventory} onUpdate={onUpdate} />
       </div>
-      <div className={styles.stepControls}>
-        <button
-          type="button"
-          className={styles.rm}
-          onClick={() => onMove(-1)}
-          disabled={index === 0}
-          aria-label="Move up"
-          title="Move up"
-        >
-          ↑
-        </button>
-        <button
-          type="button"
-          className={styles.rm}
-          onClick={() => onMove(1)}
-          disabled={index === total - 1}
-          aria-label="Move down"
-          title="Move down"
-        >
-          ↓
-        </button>
-        <button type="button" className={styles.rm} onClick={onRemove} aria-label="Remove step">
-          ✕
-        </button>
-      </div>
+      <button type="button" className={styles.rm} onClick={onRemove} aria-label="Remove step">
+        ✕
+      </button>
     </div>
   );
 }
@@ -507,48 +509,63 @@ function RecipeEditor({
   const [sortOrder, setSortOrder] = useState<string>(
     initial.sort_order != null ? String(initial.sort_order) : "",
   );
-  const [steps, setSteps] = useState<RecipeStep[]>(() => {
+  const [steps, setSteps] = useState<IdStep[]>(() => {
     const existing = stepsFor(initial);
-    if (existing.length > 0) return existing;
-    return [
-      { kind: "ice", type: "crushed", target: "shaker" },
-      { kind: "pour", target: "shaker", ingredient: ingredientNames[0] ?? "", oz: 1 },
-      { kind: "mix", mode: "shake" },
-      { kind: "strain" },
-    ];
+    const seed =
+      existing.length > 0
+        ? existing
+        : [
+            { kind: "ice", type: "crushed", target: "shaker" } as RecipeStep,
+            { kind: "pour", target: "shaker", ingredient: ingredientNames[0] ?? "", oz: 1 } as RecipeStep,
+            { kind: "mix", mode: "shake" } as RecipeStep,
+            { kind: "strain" } as RecipeStep,
+          ];
+    return seed.map((step) => ({ id: crypto.randomUUID(), step }));
   });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
 
   const effectiveId = slugify(name) || initial.id;
   const totalOz = steps
-    .filter((s): s is Extract<RecipeStep, { kind: "pour" }> => s.kind === "pour")
-    .reduce((sum, p) => sum + (Number.isFinite(p.oz) ? p.oz : 0), 0);
+    .filter(
+      (x): x is { id: string; step: Extract<RecipeStep, { kind: "pour" }> } => x.step.kind === "pour",
+    )
+    .reduce((sum, x) => sum + (Number.isFinite(x.step.oz) ? x.step.oz : 0), 0);
 
-  function updateStep(i: number, patch: Partial<RecipeStep>) {
-    setSteps((prev) => prev.map((s, idx) => (idx === i ? ({ ...s, ...patch } as RecipeStep) : s)));
+  function updateStep(id: string, patch: Partial<RecipeStep>) {
+    setSteps((prev) =>
+      prev.map((x) =>
+        x.id === id ? { ...x, step: { ...x.step, ...patch } as RecipeStep } : x,
+      ),
+    );
   }
 
-  function removeStep(i: number) {
-    setSteps((prev) => prev.filter((_, idx) => idx !== i));
+  function removeStep(id: string) {
+    setSteps((prev) => prev.filter((x) => x.id !== id));
   }
 
   function addStep(kind: RecipeStep["kind"]) {
-    setSteps((prev) => {
-      if (kind === "pour") {
-        return [...prev, { kind: "pour", target: "shaker", ingredient: ingredientNames[0] ?? "", oz: 1 }];
-      }
-      if (kind === "ice") return [...prev, { kind: "ice", type: "crushed", target: "shaker" }];
-      if (kind === "mix") return [...prev, { kind: "mix", mode: "shake" }];
-      return [...prev, { kind: "strain" }];
-    });
+    const step: RecipeStep =
+      kind === "pour"
+        ? { kind: "pour", target: "shaker", ingredient: ingredientNames[0] ?? "", oz: 1 }
+        : kind === "ice"
+        ? { kind: "ice", type: "crushed", target: "shaker" }
+        : kind === "mix"
+        ? { kind: "mix", mode: "shake" }
+        : { kind: "strain" };
+    setSteps((prev) => [...prev, { id: crypto.randomUUID(), step }]);
   }
 
-  function moveStep(i: number, dir: -1 | 1) {
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
     setSteps((prev) => {
-      const j = i + dir;
-      if (j < 0 || j >= prev.length) return prev;
-      const next = prev.slice();
-      [next[i], next[j]] = [next[j], next[i]];
-      return next;
+      const oldIdx = prev.findIndex((x) => x.id === active.id);
+      const newIdx = prev.findIndex((x) => x.id === over.id);
+      if (oldIdx < 0 || newIdx < 0) return prev;
+      return arrayMove(prev, oldIdx, newIdx);
     });
   }
 
@@ -566,7 +583,7 @@ function RecipeEditor({
     const next: Recipe = {
       id: effectiveId,
       name: trimmedName,
-      steps,
+      steps: steps.map((x) => x.step),
       on_menu: onMenu,
     };
     if (image) next.image = image;
@@ -690,19 +707,22 @@ function RecipeEditor({
               <span className={styles.pourTotal}>{fmtOz(totalOz)} oz in the glass</span>
             </div>
 
-            {steps.map((step, i) => (
-              <StepRow
-                key={i}
-                index={i}
-                step={step}
-                total={steps.length}
-                ingredientNames={ingredientNames}
-                inventory={inventory}
-                onUpdate={(patch) => updateStep(i, patch)}
-                onRemove={() => removeStep(i)}
-                onMove={(dir) => moveStep(i, dir)}
-              />
-            ))}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={steps.map((x) => x.id)} strategy={verticalListSortingStrategy}>
+                {steps.map((item, i) => (
+                  <SortableStepRow
+                    key={item.id}
+                    id={item.id}
+                    index={i}
+                    step={item.step}
+                    ingredientNames={ingredientNames}
+                    inventory={inventory}
+                    onUpdate={(patch) => updateStep(item.id, patch)}
+                    onRemove={() => removeStep(item.id)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
 
             <div className={styles.pourAddRow}>
               <AddStepMenu onPick={addStep} />
