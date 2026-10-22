@@ -20,7 +20,6 @@ type Recipe struct {
 type Pour struct {
 	Ingredient string  `json:"ingredient"`
 	Oz         float64 `json:"oz"`
-	TolOz      float64 `json:"tol_oz,omitempty"`
 }
 
 type Inventory struct {

@@ -127,7 +127,7 @@
   border-top: 1px solid var(--hair);
 }
 .ing .row {
-  grid-template-columns: 32px 1fr 120px 120px;
+  grid-template-columns: 32px 1fr 120px;
   min-height: 48px;
 }
 .ing .head {
@@ -275,7 +275,7 @@
 
 .pour {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 0.8fr 36px;
+  grid-template-columns: 1.6fr 1fr 36px;
   gap: 10px;
   align-items: end;
   margin-bottom: 12px;

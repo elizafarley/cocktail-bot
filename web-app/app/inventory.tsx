@@ -230,7 +230,7 @@ function SlotsSection({
             <span className={styles.dot} style={{ background: slot.ingredient ? "var(--ok)" : "var(--smoke)" }} aria-hidden />
             <span className={styles.name}>{slot.id}</span>
             <select
-              className={styles.input}
+              className={styles.select}
               value={slot.ingredient ?? ""}
               onChange={(e) => onAssign(slot.id, e.target.value)}
               disabled={busy}
@@ -284,9 +284,7 @@ function StockSection({
               aria-hidden
             />
             <span className={styles.name}>{titleCase(name)}</span>
-            <span className={`${styles.slot} ${stock.slot ? "" : styles.slotEmpty}`}>
-              {stock.slot ?? "No slot"}
-            </span>
+            <span className={styles.slot}>{stock.slot ?? ""}</span>
             <PourerOzInput key={`${name}:${stock.pourer_oz ?? ""}`} ingredient={name} initial={stock.pourer_oz} busy={busy} onSave={onPourerOz} />
             <button
               type="button"
