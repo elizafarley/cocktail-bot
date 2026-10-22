@@ -267,9 +267,19 @@
   border: 0;
   cursor: pointer;
 }
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .btnMain {
   background: var(--verm);
   color: #fff;
+}
+.outNote {
+  margin: -8px 0 0;
+  color: var(--bad);
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .pours {
