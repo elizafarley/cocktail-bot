@@ -1,30 +1,42 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ViamConnection } from "./lib/viamClient";
 import {
   clearSlotAssignment,
   deleteInventoryItem,
   getInventory,
+  getRecipes,
+  updateCategory,
   updateInventoryItem,
   updatePourerOz,
   updateSlotAssignment,
 } from "./lib/viamClient";
 import type { Inventory } from "./lib/inventory";
+import type { Recipe } from "./lib/recipes";
+import { recipeIngredients } from "./lib/recipes";
 import { Nav } from "./nav";
 import { titleCase } from "./lib/display";
 import styles from "./inventory.module.css";
 
+const COMMON_CATEGORIES = ["Spirits", "Liqueurs", "Juices & mixers", "Syrups & bitters"];
+const UNCATEGORIZED = "Uncategorized";
+
 export function InventoryPage({ conn }: { conn: ViamConnection }) {
   const [inventory, setInventory] = useState<Inventory | null>(null);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<string>("All");
 
   const load = useCallback(() => {
-    getInventory(conn)
-      .then(setInventory)
+    Promise.all([getInventory(conn), getRecipes(conn)])
+      .then(([inv, rs]) => {
+        setInventory(inv);
+        setRecipes(rs);
+      })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   }, [conn]);
 
@@ -105,10 +117,22 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
     }
   }
 
+  async function saveCategory(ingredient: string, category: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateCategory(conn, ingredient, category);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const usedIn = useMemo(() => buildRecipeIndex(recipes), [recipes]);
+
   const items = inventory ? Object.entries(inventory.ingredients).sort(([a], [b]) => a.localeCompare(b)) : [];
-  const inStock = items.filter(([, s]) => s.in_stock);
-  const outOfStock = items.filter(([, s]) => !s.in_stock && s.slot);
-  const noSlot = items.filter(([, s]) => !s.slot);
   const slots = inventory?.slots ?? [];
   const ingredientNames = items.map(([name]) => name);
   const selectedSlot = selectedSlotId ? slots.find((s) => s.id === selectedSlotId) ?? null : null;
@@ -162,11 +186,14 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                 {items.length === 0 ? (
                   <p className={styles.empty}>No ingredients yet. Add one above.</p>
                 ) : (
-                  <>
-                    <StockSection title="In stock" count={inStock.length} items={inStock} inStock busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
-                    <StockSection title="Out of stock" count={outOfStock.length} items={outOfStock} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
-                    <StockSection title="No slot" count={noSlot.length} items={noSlot} inStock={false} busy={busy} onToggle={toggle} onDelete={remove} onPourerOz={savePourerOz} />
-                  </>
+                  <AllIngredientsSection
+                    items={items}
+                    usedIn={usedIn}
+                    filter={filter}
+                    onFilter={setFilter}
+                    busy={busy}
+                    onDelete={remove}
+                  />
                 )}
               </div>
               {selectedSlot && (
@@ -174,11 +201,13 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                   slot={selectedSlot}
                   stock={selectedStock}
                   ingredientNames={ingredientNames}
+                  usedIn={selectedSlot.ingredient ? usedIn.get(selectedSlot.ingredient) ?? [] : []}
                   busy={busy}
                   onAssign={assignSlot}
                   onPourerOz={savePourerOz}
                   onToggleStock={toggle}
                   onDeleteIngredient={remove}
+                  onCategory={saveCategory}
                   onClose={() => setSelectedSlotId(null)}
                 />
               )}
@@ -190,49 +219,26 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
   );
 }
 
-function PourerOzInput({
-  ingredient,
-  initial,
-  busy,
-  onSave,
-}: {
-  ingredient: string;
-  initial: number | undefined;
-  busy: boolean;
-  onSave: (ingredient: string, oz: number) => void;
-}) {
-  const [value, setValue] = useState<string>(initial != null ? String(initial) : "");
+type Slot = { id: string; ingredient?: string };
+type IngredientRecord = Record<string, { in_stock: boolean; slot?: string; pourer_oz?: number; category?: string }>;
+type IngredientEntry = [string, { in_stock: boolean; slot?: string; pourer_oz?: number; category?: string }];
 
-  function commit() {
-    const n = Number(value);
-    if (!Number.isFinite(n) || n <= 0) {
-      setValue(initial != null ? String(initial) : "");
-      return;
+function buildRecipeIndex(recipes: Recipe[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const recipe of recipes) {
+    for (const ingredient of recipeIngredients(recipe)) {
+      const list = out.get(ingredient) ?? [];
+      list.push(recipe.name);
+      out.set(ingredient, list);
     }
-    if (n === initial) return;
-    onSave(ingredient, n);
   }
-
-  return (
-    <input
-      type="number"
-      className={styles.ozInput}
-      value={value}
-      min={0}
-      step={0.5}
-      placeholder="oz"
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-      }}
-      disabled={busy}
-    />
-  );
+  for (const list of out.values()) list.sort((a, b) => a.localeCompare(b));
+  return out;
 }
 
-type Slot = { id: string; ingredient?: string };
-type IngredientRecord = Record<string, { in_stock: boolean; slot?: string; pourer_oz?: number }>;
+function categoryOf(stock: { category?: string }): string {
+  return stock.category && stock.category.trim() ? stock.category : UNCATEGORIZED;
+}
 
 function parseSlotId(id: string): { letter: string; row: string } {
   const parts = id.split("-");
@@ -336,21 +342,25 @@ function SlotPanel({
   slot,
   stock,
   ingredientNames,
+  usedIn,
   busy,
   onAssign,
   onPourerOz,
   onToggleStock,
   onDeleteIngredient,
+  onCategory,
   onClose,
 }: {
   slot: Slot;
-  stock: { in_stock: boolean; pourer_oz?: number } | undefined;
+  stock: { in_stock: boolean; pourer_oz?: number; category?: string } | undefined;
   ingredientNames: string[];
+  usedIn: string[];
   busy: boolean;
   onAssign: (slot: string, ingredient: string) => void;
   onPourerOz: (ingredient: string, oz: number) => void;
   onToggleStock: (ingredient: string, nextInStock: boolean) => void;
   onDeleteIngredient: (ingredient: string) => void;
+  onCategory: (ingredient: string, category: string) => void;
   onClose: () => void;
 }) {
   const { letter, row } = parseSlotId(slot.id);
@@ -400,6 +410,28 @@ function SlotPanel({
           ))}
         </select>
       </label>
+
+      {hasBottle && (
+        <CategoryField
+          ingredient={bottle!}
+          initial={stock?.category ?? ""}
+          busy={busy}
+          onSave={onCategory}
+        />
+      )}
+
+      {hasBottle && usedIn.length > 0 && (
+        <div className={styles.panelField}>
+          <span className={styles.panelLabel}>Used in</span>
+          <div className={styles.usedChips}>
+            {usedIn.map((name) => (
+              <span key={name} className={styles.usedChip}>
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {hasBottle && (
         <fieldset className={styles.panelField}>
@@ -459,65 +491,209 @@ function SlotPanel({
   );
 }
 
-function StockSection({
-  title,
-  count,
-  items,
-  inStock,
+function CategoryField({
+  ingredient,
+  initial,
   busy,
-  onToggle,
-  onDelete,
-  onPourerOz,
+  onSave,
 }: {
-  title: string;
-  count: number;
-  items: [string, { in_stock: boolean; slot?: string; pourer_oz?: number }][];
-  inStock: boolean;
+  ingredient: string;
+  initial: string;
   busy: boolean;
-  onToggle: (name: string, next: boolean) => void;
-  onDelete: (name: string) => void;
-  onPourerOz: (name: string, oz: number) => void;
+  onSave: (ingredient: string, category: string) => void;
 }) {
-  if (items.length === 0) return null;
+  const [value, setValue] = useState(initial);
+  const datalistId = `cat-list-${ingredient}`;
+
+  function commit() {
+    const next = value.trim();
+    if (next === initial.trim()) return;
+    onSave(ingredient, next);
+  }
+
+  return (
+    <label className={styles.panelField}>
+      <span className={styles.panelLabel}>Category</span>
+      <input
+        key={`${ingredient}:${initial}`}
+        type="text"
+        list={datalistId}
+        className={styles.input}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        disabled={busy}
+        placeholder="e.g. Spirits"
+      />
+      <datalist id={datalistId}>
+        {COMMON_CATEGORIES.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+    </label>
+  );
+}
+
+function AllIngredientsSection({
+  items,
+  usedIn,
+  filter,
+  onFilter,
+  busy,
+  onDelete,
+}: {
+  items: IngredientEntry[];
+  usedIn: Map<string, string[]>;
+  filter: string;
+  onFilter: (next: string) => void;
+  busy: boolean;
+  onDelete: (name: string) => void;
+}) {
+  const counts = new Map<string, number>();
+  for (const [, stock] of items) {
+    const cat = categoryOf(stock);
+    counts.set(cat, (counts.get(cat) ?? 0) + 1);
+  }
+  const activeCategories = [...counts.keys()].sort((a, b) => {
+    if (a === UNCATEGORIZED) return 1;
+    if (b === UNCATEGORIZED) return -1;
+    return a.localeCompare(b);
+  });
+
+  const filteredItems = filter === "All" ? items : items.filter(([, s]) => categoryOf(s) === filter);
+  const grouped = new Map<string, IngredientEntry[]>();
+  for (const entry of filteredItems) {
+    const cat = categoryOf(entry[1]);
+    const list = grouped.get(cat) ?? [];
+    list.push(entry);
+    grouped.set(cat, list);
+  }
+  const orderedCats = [...grouped.keys()].sort((a, b) => {
+    if (a === UNCATEGORIZED) return 1;
+    if (b === UNCATEGORIZED) return -1;
+    return a.localeCompare(b);
+  });
+
   return (
     <section className={styles.section}>
-      <h2>
-        {title}
-        <span className={styles.sectionCount}>{count}</span>
-      </h2>
-      <div className={styles.rows}>
-        {items.map(([name, stock]) => (
-          <div key={name} className={`${styles.row} ${styles.rowStock}`}>
-            <span
-              className={styles.dot}
-              style={{ background: inStock ? "var(--ok)" : "var(--smoke)" }}
-              aria-hidden
+      <div className={styles.sectionBar}>
+        <h2>All ingredients</h2>
+        <div className={styles.chips}>
+          <FilterChip label="All" count={items.length} active={filter === "All"} onClick={() => onFilter("All")} />
+          {activeCategories.map((cat) => (
+            <FilterChip
+              key={cat}
+              label={cat}
+              count={counts.get(cat) ?? 0}
+              active={filter === cat}
+              onClick={() => onFilter(cat)}
             />
-            <span className={styles.name}>{titleCase(name)}</span>
-            <span className={styles.slot}>{stock.slot ?? ""}</span>
-            <PourerOzInput key={`${name}:${stock.pourer_oz ?? ""}`} ingredient={name} initial={stock.pourer_oz} busy={busy} onSave={onPourerOz} />
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.btnStock}`}
-              onClick={() => onToggle(name, !inStock)}
-              disabled={busy || !stock.slot}
-              title={stock.slot ? "" : "Assign this ingredient to a slot above before marking in stock"}
-            >
-              Mark {inStock ? "out of stock" : "in stock"}
-            </button>
-            <button
-              type="button"
-              className={styles.btnIcon}
-              onClick={() => onDelete(name)}
-              disabled={busy}
-              aria-label={`Delete ${name}`}
-              title="Delete"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
+
+      <div className={styles.tableHead}>
+        <span>Ingredient</span>
+        <span>Status</span>
+        <span>Pourer</span>
+        <span>Used in</span>
+        <span />
+      </div>
+
+      {orderedCats.map((cat) => (
+        <div key={cat} className={styles.catGroup}>
+          <h3 className={styles.rowLabel}>{cat}</h3>
+          {(grouped.get(cat) ?? []).map(([name, stock]) => (
+            <IngredientRow
+              key={name}
+              name={name}
+              stock={stock}
+              recipeNames={usedIn.get(name) ?? []}
+              busy={busy}
+              onDelete={onDelete}
+            />
+          ))}
+        </div>
+      ))}
     </section>
   );
 }
+
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      className={`${styles.chip} ${active ? styles.chipActive : ""}`}
+      onClick={onClick}
+    >
+      {label} <span className={styles.chipCount}>{count}</span>
+    </button>
+  );
+}
+
+function IngredientRow({
+  name,
+  stock,
+  recipeNames,
+  busy,
+  onDelete,
+}: {
+  name: string;
+  stock: { in_stock: boolean; slot?: string; pourer_oz?: number };
+  recipeNames: string[];
+  busy: boolean;
+  onDelete: (name: string) => void;
+}) {
+  let dotColor = "transparent";
+  let statusLabel: string;
+  if (!stock.slot) {
+    statusLabel = "Not on rack";
+    dotColor = "var(--smoke)";
+  } else if (stock.in_stock) {
+    statusLabel = `On rack · Slot ${parseSlotId(stock.slot).letter}`;
+    dotColor = "var(--ok)";
+  } else {
+    statusLabel = "Out of stock";
+    dotColor = "var(--bad)";
+  }
+  return (
+    <div className={styles.tableRow}>
+      <span className={styles.rowName}>{titleCase(name)}</span>
+      <span className={styles.rowStatus}>
+        <span
+          className={styles.dot}
+          style={{ background: stock.slot ? dotColor : "transparent", border: stock.slot ? "0" : "1.5px solid var(--smoke)" }}
+          aria-hidden
+        />
+        {statusLabel}
+      </span>
+      <span className={styles.rowPourer}>{stock.pourer_oz != null ? `${stock.pourer_oz} oz` : "—"}</span>
+      <span className={styles.rowUsed}>{recipeNames.length > 0 ? recipeNames.join(", ") : "—"}</span>
+      <button
+        type="button"
+        className={styles.btnIcon}
+        onClick={() => onDelete(name)}
+        disabled={busy}
+        aria-label={`Delete ${name}`}
+        title="Delete"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+

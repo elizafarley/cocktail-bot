@@ -10,6 +10,7 @@ export interface IngredientStock {
   in_stock: boolean;
   slot?: string;
   pourer_oz?: number;
+  category?: string;
 }
 
 export interface Slot {

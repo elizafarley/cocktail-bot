@@ -250,6 +250,17 @@ export async function updatePourerOz(
   });
 }
 
+export async function updateCategory(
+  conn: ViamConnection,
+  ingredient: string,
+  category: string,
+): Promise<{ ingredient: string; category: string }> {
+  if (conn.isDev) return { ingredient, category };
+  return doCommand(conn, BARTENDER_SERVICE_NAME, {
+    update_category: { ingredient, category },
+  });
+}
+
 export async function updateRecipes(
   conn: ViamConnection,
   recipes: Recipe[],

@@ -35,6 +35,7 @@ const (
 	inventoryFileName       = "inventory.json"
 	slotAssignmentsFileName = "slot_assignments.json"
 	pourerOzFileName        = "pourer_oz.json"
+	categoriesFileName      = "categories.json"
 )
 
 var errDataStoreNotConfigured = errors.New("data_dir not configured; recipes and inventory DoCommands unavailable")
@@ -46,6 +47,7 @@ type dataStore struct {
 	inventory       Inventory
 	slotAssignments map[string]string
 	pourerOz        map[string]float64
+	categories      map[string]string
 }
 
 func newDataStore(dir string) (*dataStore, error) {
@@ -60,6 +62,7 @@ func newDataStore(dir string) (*dataStore, error) {
 		inventory:       Inventory{Ingredients: map[string]IngredientStock{}},
 		slotAssignments: map[string]string{},
 		pourerOz:        map[string]float64{},
+		categories:      map[string]string{},
 	}
 	if err := ds.loadRecipes(); err != nil {
 		return nil, err
@@ -71,6 +74,9 @@ func newDataStore(dir string) (*dataStore, error) {
 		return nil, err
 	}
 	if err := ds.loadPourerOz(); err != nil {
+		return nil, err
+	}
+	if err := ds.loadCategories(); err != nil {
 		return nil, err
 	}
 	return ds, nil
@@ -300,6 +306,66 @@ func (ds *dataStore) persistPourerOzLocked() error {
 		return fmt.Errorf("marshal pourer_oz: %w", err)
 	}
 	path := filepath.Join(ds.dir, pourerOzFileName)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", tmp, path, err)
+	}
+	return nil
+}
+
+func (ds *dataStore) loadCategories() error {
+	path := filepath.Join(ds.dir, categoriesFileName)
+	bytes, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	var c map[string]string
+	if err := json.Unmarshal(bytes, &c); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	if c == nil {
+		c = map[string]string{}
+	}
+	ds.categories = c
+	return nil
+}
+
+func (ds *dataStore) Categories() map[string]string {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	out := make(map[string]string, len(ds.categories))
+	for k, v := range ds.categories {
+		out[k] = v
+	}
+	return out
+}
+
+func (ds *dataStore) UpdateCategory(ingredient, category string) error {
+	if ingredient == "" {
+		return errors.New("ingredient is required")
+	}
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	if category == "" {
+		delete(ds.categories, ingredient)
+	} else {
+		ds.categories[ingredient] = category
+	}
+	return ds.persistCategoriesLocked()
+}
+
+func (ds *dataStore) persistCategoriesLocked() error {
+	bytes, err := json.MarshalIndent(ds.categories, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal categories: %w", err)
+	}
+	path := filepath.Join(ds.dir, categoriesFileName)
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", tmp, err)
