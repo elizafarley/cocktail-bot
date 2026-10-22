@@ -196,7 +196,7 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                   />
                 )}
               </div>
-              {selectedSlot && (
+              {selectedSlot ? (
                 <SlotPanel
                   slot={selectedSlot}
                   stock={selectedStock}
@@ -210,6 +210,14 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                   onCategory={saveCategory}
                   onClose={() => setSelectedSlotId(null)}
                 />
+              ) : (
+                <aside className={`${styles.panel} ${styles.panelEmpty}`} aria-hidden>
+                  <p className={styles.panelCrumb}>Side panel</p>
+                  <h2 className={styles.panelTitle}>Pick a slot</h2>
+                  <p className={styles.panelHint}>
+                    Tap any card above to change its bottle, set the pourer size, or mark it out of stock.
+                  </p>
+                </aside>
               )}
             </div>
           )}
@@ -324,7 +332,6 @@ function RackCard({
     >
       <span className={styles.rackHead}>
         <span className={styles.rackLetter}>{letter}</span>
-        <span className={styles.rackSlotLabel}>Slot {letter}</span>
       </span>
       <span className={styles.rackBottle}>{hasBottle ? titleCase(slot.ingredient!) : "Empty slot"}</span>
       {hasBottle && stock?.pourer_oz != null && (
