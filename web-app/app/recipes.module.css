@@ -218,6 +218,24 @@
   border: 1px solid var(--bad);
   color: var(--bad);
 }
+.btnDangerQuiet {
+  background: transparent;
+  border: 0;
+  color: var(--verm);
+  font: inherit;
+  font-size: 15px;
+  padding: 0 10px;
+  height: 44px;
+  margin-right: auto;
+  cursor: pointer;
+}
+.btnDangerQuiet:hover:not(:disabled) {
+  color: var(--ink);
+}
+.btnDangerQuiet:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .btn:disabled {
   opacity: 0.5;
   cursor: default;
@@ -262,25 +280,59 @@
     opacity: 1;
   }
 }
-.panelHead {
+.editorHead {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 24px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
 }
-.panelHead h4 {
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+.editorHeadLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.editorHeadLeft .recipeArt {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+}
+.editorHeadLeft .recipeArt img {
+  width: 56px;
+  height: 56px;
+}
+.editorTitleGroup {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.editorTitle {
   margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.closeX {
-  background: none;
-  border: 0;
+.editorIdHint {
+  margin: 0;
+  font-size: 13px;
   color: var(--smoke);
+  word-break: break-all;
+}
+.closeRound {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--tile);
+  color: var(--ink);
   font-size: 20px;
   cursor: pointer;
-  padding: 4px;
   line-height: 1;
 }
 
@@ -340,27 +392,68 @@
 .switch[aria-checked="true"] .switchThumb {
   transform: translateX(18px);
 }
-.sub {
-  font-size: 17px;
-  font-weight: 600;
-  margin: 8px 0 12px;
-  color: var(--ink);
+.editorColumns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.editorColumns > label {
+  margin: 0;
 }
 
-.pourHead {
+.pourSection {
+  border-top: 1px solid var(--hair);
+  padding-top: 18px;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pourSectionHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.pourSectionTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.pourHeadOz {
+  font-size: 14px;
+  color: var(--smoke);
+}
+.pourRow {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 36px;
+  grid-template-columns: 24px 1fr 96px 44px;
   gap: 10px;
+  align-items: start;
+}
+.pourIndex {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--smoke);
+  font-size: 15px;
+}
+.pourMain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pourTilt {
   font-size: 13px;
   color: var(--smoke);
-  margin: 0 0 6px;
 }
-.pour {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr 36px;
-  gap: 10px;
+.pourAddRow {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pourTotal {
+  font-size: 15px;
 }
 .rm {
   height: 44px;
