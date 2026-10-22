@@ -146,9 +146,15 @@ function DrinkGrid({
   disabled: boolean;
   onOrder: (recipe: Recipe) => void;
 }) {
+  const sorted = [...recipes].sort((a, b) => {
+    const aAvail = isAvailable(a, inventory);
+    const bAvail = isAvailable(b, inventory);
+    if (aAvail !== bAvail) return aAvail ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
   return (
     <ul className={styles.menu}>
-      {recipes.map((recipe) => {
+      {sorted.map((recipe) => {
         const available = isAvailable(recipe, inventory);
         return (
           <li key={recipe.id}>
