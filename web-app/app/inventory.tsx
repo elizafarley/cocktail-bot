@@ -226,7 +226,7 @@ function SlotsSection({
       </h2>
       <div className={styles.rows}>
         {slots.map((slot) => (
-          <div key={slot.id} className={styles.row}>
+          <div key={slot.id} className={`${styles.row} ${styles.rowSlot}`}>
             <span className={styles.dot} style={{ background: slot.ingredient ? "var(--ok)" : "var(--smoke)" }} aria-hidden />
             <span className={styles.name}>{slot.id}</span>
             <select
@@ -242,7 +242,6 @@ function SlotsSection({
                 </option>
               ))}
             </select>
-            <span />
           </div>
         ))}
       </div>
@@ -278,36 +277,36 @@ function StockSection({
       </h2>
       <div className={styles.rows}>
         {items.map(([name, stock]) => (
-          <div key={name} className={styles.row}>
+          <div key={name} className={`${styles.row} ${styles.rowStock}`}>
             <span
               className={styles.dot}
               style={{ background: inStock ? "var(--ok)" : "var(--smoke)" }}
               aria-hidden
             />
             <span className={styles.name}>{titleCase(name)}</span>
-            <span className={styles.slot}>{stock.slot ?? "No slot"}</span>
+            <span className={`${styles.slot} ${stock.slot ? "" : styles.slotEmpty}`}>
+              {stock.slot ?? "No slot"}
+            </span>
             <PourerOzInput key={`${name}:${stock.pourer_oz ?? ""}`} ingredient={name} initial={stock.pourer_oz} busy={busy} onSave={onPourerOz} />
-            <div className={styles.rowBtns}>
-              <button
-                type="button"
-                className={styles.btn}
-                onClick={() => onToggle(name, !inStock)}
-                disabled={busy || !stock.slot}
-                title={stock.slot ? "" : "Assign this ingredient to a slot above before marking in stock"}
-              >
-                Mark {inStock ? "out of stock" : "in stock"}
-              </button>
-              <button
-                type="button"
-                className={styles.btnIcon}
-                onClick={() => onDelete(name)}
-                disabled={busy}
-                aria-label={`Delete ${name}`}
-                title="Delete"
-              >
-                ✕
-              </button>
-            </div>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.btnStock}`}
+              onClick={() => onToggle(name, !inStock)}
+              disabled={busy || !stock.slot}
+              title={stock.slot ? "" : "Assign this ingredient to a slot above before marking in stock"}
+            >
+              Mark {inStock ? "out of stock" : "in stock"}
+            </button>
+            <button
+              type="button"
+              className={styles.btnIcon}
+              onClick={() => onDelete(name)}
+              disabled={busy}
+              aria-label={`Delete ${name}`}
+              title="Delete"
+            >
+              ✕
+            </button>
           </div>
         ))}
       </div>
