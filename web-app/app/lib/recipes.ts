@@ -29,17 +29,27 @@ export const COMMON_RECIPE_TAGS = ["Halloween", "New"];
 export const DRINK_IMAGE_SLUGS = [
   "amaretto-sour",
   "aperol-spritz",
+  "aviation",
   "blood-moon",
+  "daiquiri",
+  "draculas-blood",
   "espresso-martini",
+  "gimlet",
   "gin-and-tonic",
+  "kamikaze",
   "lemon-drop",
+  "mango-margarita",
   "margarita",
   "martini",
   "mocktail",
   "moscow-mule",
   "negroni",
   "old-fashioned",
+  "passion-fruit-martini",
+  "whiskey-neat",
+  "whiskey-sour",
   "witchs-brew",
+  "witchs-brew-empress",
 ] as const;
 
 export interface Pour {
