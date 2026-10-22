@@ -425,14 +425,25 @@
 }
 .pourRow {
   display: grid;
-  grid-template-columns: 24px 1fr auto;
+  grid-template-columns: 28px 1fr 44px;
   gap: 10px;
   align-items: start;
+  background: var(--paper);
 }
-.stepControls {
+.stepGrip {
   display: flex;
-  gap: 2px;
   align-items: center;
+  justify-content: center;
+  height: 44px;
+  color: var(--smoke);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  font-size: 18px;
+  line-height: 1;
+}
+.stepGrip:active {
+  cursor: grabbing;
 }
 .stepPourRow {
   display: grid;
