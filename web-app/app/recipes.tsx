@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ViamConnection } from "./lib/viamClient";
 import { getBottles, getRecipes, updateRecipes } from "./lib/viamClient";
 import type { Pour, Recipe } from "./lib/recipes";
-import { DRINK_IMAGE_SLUGS } from "./lib/recipes";
+import { COMMON_RECIPE_SECTIONS, COMMON_RECIPE_TAGS, DRINK_IMAGE_SLUGS } from "./lib/recipes";
 import { Nav } from "./nav";
 import { titleCase as cap } from "./lib/display";
 import styles from "./recipes.module.css";
@@ -102,7 +102,13 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
                   className={styles.rhead}
                   onClick={() => setEditing({ index: i, recipe: structuredClone(recipe) })}
                 >
-                  <h2>{recipe.name || recipe.id || "(unnamed)"}</h2>
+                  <div className={styles.rheadTitle}>
+                    {recipe.section && <span className={styles.rheadSection}>{recipe.section}</span>}
+                    <div className={styles.rheadName}>
+                      <h2>{recipe.name || recipe.id || "(unnamed)"}</h2>
+                      {recipe.tag && <span className={styles.tagBadge}>{recipe.tag}</span>}
+                    </div>
+                  </div>
                   {recipe.on_menu !== false ? (
                     <span className={styles.st}>
                       <i style={{ background: "var(--ok)" }} />
@@ -179,6 +185,11 @@ function RecipeEditor({
   const [idTouched, setIdTouched] = useState(initial.id !== "");
   const [onMenu, setOnMenu] = useState(initial.on_menu !== false);
   const [image, setImage] = useState(initial.image ?? "");
+  const [section, setSection] = useState(initial.section ?? "");
+  const [tag, setTag] = useState(initial.tag ?? "");
+  const [sortOrder, setSortOrder] = useState<string>(
+    initial.sort_order != null ? String(initial.sort_order) : "",
+  );
   const [pours, setPours] = useState<Pour[]>(
     initial.pours.length > 0 ? initial.pours : [{ ingredient: ingredientNames[0] ?? "", oz: 1 }],
   );
@@ -209,6 +220,12 @@ function RecipeEditor({
     }
     const next: Recipe = { id: effectiveId, name: trimmedName, pours, on_menu: onMenu };
     if (image) next.image = image;
+    const trimmedSection = section.trim();
+    if (trimmedSection) next.section = trimmedSection;
+    const trimmedTag = tag.trim();
+    if (trimmedTag) next.tag = trimmedTag;
+    const parsedOrder = Number(sortOrder);
+    if (sortOrder !== "" && Number.isFinite(parsedOrder)) next.sort_order = parsedOrder;
     onSave(next);
   }
 
@@ -276,6 +293,52 @@ function RecipeEditor({
                 </option>
               ))}
             </select>
+          </label>
+
+          <label>
+            <span>Section</span>
+            <input
+              className={styles.input}
+              type="text"
+              list="recipe-sections"
+              value={section}
+              onChange={(e) => setSection(e.target.value)}
+              placeholder="e.g. Classics"
+            />
+            <datalist id="recipe-sections">
+              {COMMON_RECIPE_SECTIONS.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </label>
+
+          <label>
+            <span>Tag</span>
+            <input
+              className={styles.input}
+              type="text"
+              list="recipe-tags"
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              placeholder="None"
+            />
+            <datalist id="recipe-tags">
+              {COMMON_RECIPE_TAGS.map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+          </label>
+
+          <label>
+            <span>Sort order <span className={styles.muted}>(lower shows first)</span></span>
+            <input
+              className={styles.input}
+              type="number"
+              step={1}
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value)}
+              placeholder="0"
+            />
           </label>
 
           <p className={styles.sub}>Pours, in order</p>

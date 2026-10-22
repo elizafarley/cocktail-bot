@@ -4,6 +4,7 @@
   --smoke: #6e6e73;
   --hair: #e8e8ed;
   --verm: #a3202c;
+  --blush: #fbedee;
   --tile: #f5f5f7;
   --ok: #1e8e3e;
   --bad: #c5221f;
@@ -24,6 +25,7 @@
     --smoke: #a1a1a6;
     --hair: #2c2c2e;
     --verm: #e5525e;
+    --blush: #2b1316;
     --tile: #1c1c1e;
     --ok: #34c759;
     --bad: #ff453a;
@@ -91,6 +93,33 @@
   font-weight: 600;
   letter-spacing: -0.015em;
   margin: 0;
+}
+.rheadTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rheadSection {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--smoke);
+}
+.rheadName {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.tagBadge {
+  background: var(--blush);
+  color: var(--verm);
+  border-radius: 10px;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: 600;
 }
 .chev {
   color: var(--smoke);

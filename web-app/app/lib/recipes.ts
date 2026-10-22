@@ -4,7 +4,13 @@ export interface Recipe {
   pours: Pour[];
   on_menu?: boolean;
   image?: string;
+  section?: string;
+  tag?: string;
+  sort_order?: number;
 }
+
+export const COMMON_RECIPE_SECTIONS = ["Classics", "Halloween specials"];
+export const COMMON_RECIPE_TAGS = ["Halloween", "New"];
 
 export const DRINK_IMAGE_SLUGS = [
   "amaretto-sour",

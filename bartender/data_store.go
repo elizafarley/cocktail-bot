@@ -10,11 +10,14 @@ import (
 )
 
 type Recipe struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Pours  []Pour `json:"pours"`
-	OnMenu bool   `json:"on_menu,omitempty"`
-	Image  string `json:"image,omitempty"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Pours     []Pour `json:"pours"`
+	OnMenu    bool   `json:"on_menu,omitempty"`
+	Image     string `json:"image,omitempty"`
+	Section   string `json:"section,omitempty"`
+	Tag       string `json:"tag,omitempty"`
+	SortOrder int    `json:"sort_order,omitempty"`
 }
 
 type Pour struct {
