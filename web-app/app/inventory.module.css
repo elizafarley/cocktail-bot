@@ -362,6 +362,8 @@
   gap: 22px;
   position: sticky;
   top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   background: var(--paper);
 }
 .panelHead {
