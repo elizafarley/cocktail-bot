@@ -12,6 +12,7 @@ import {
 } from "./lib/viamClient";
 import type { OrderStatus } from "./lib/viamClient";
 import type { Recipe } from "./lib/recipes";
+import { recipePours } from "./lib/recipes";
 import type { Inventory } from "./lib/inventory";
 import { isAvailable } from "./lib/inventory";
 import { titleCase } from "./lib/display";
@@ -241,7 +242,7 @@ function groupBySection(recipes: Recipe[]): { section: string; recipes: Recipe[]
 }
 
 function firstMissingIngredient(recipe: Recipe, inventory: Inventory): string | null {
-  for (const pour of recipe.pours) {
+  for (const pour of recipePours(recipe)) {
     const stock = inventory.ingredients[pour.ingredient];
     if (!stock || !stock.in_stock) return pour.ingredient;
   }
@@ -323,7 +324,7 @@ function DrinkCard({
   orderable: boolean;
   onPick: (recipe: Recipe, orderable: boolean) => void;
 }) {
-  const ingredientLine = recipe.pours.map((p) => titleCase(p.ingredient)).join(" · ");
+  const ingredientLine = recipePours(recipe).map((p) => titleCase(p.ingredient)).join(" · ");
   return (
     <button
       type="button"
@@ -360,7 +361,7 @@ function OrderSheet({
         </div>
         <h3>{recipe.name}</h3>
         <ul className={styles.pours}>
-          {recipe.pours.map((pour, i) => (
+          {recipePours(recipe).map((pour, i) => (
             <li key={i}>
               <span>{titleCase(pour.ingredient)}</span>
               <span>{pour.oz} oz</span>

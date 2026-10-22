@@ -326,7 +326,7 @@ export async function makeCocktail(
   const q = Math.max(1, Math.min(4, Math.floor(quantity)));
   if (conn.isDev) {
     const recipe = DEV_RECIPES.find((r) => r.id === drinkId);
-    const phases = (recipe?.pours.length ?? 0) + 5;
+    const phases = (recipe?.pours?.length ?? 0) + 5;
     await new Promise((resolve) => setTimeout(resolve, DEV_VERB_DELAY_MS * phases * q));
     return;
   }
