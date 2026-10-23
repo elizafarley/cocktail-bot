@@ -12,7 +12,7 @@ import {
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ViamConnection } from "./lib/viamClient";
-import { getBottles, getInventory, getRecipes, updateRecipes } from "./lib/viamClient";
+import { getInventory, getRecipes, updateRecipes } from "./lib/viamClient";
 import type { Recipe } from "./lib/recipes";
 import { COMMON_RECIPE_SECTIONS, COMMON_RECIPE_TAGS, DRINK_IMAGE_SLUGS, recipePours, stepsFor } from "./lib/recipes";
 import type { RecipeStep, PourTarget } from "./lib/recipes";
@@ -89,17 +89,15 @@ function recipeStatus(recipe: Recipe, inventory: Inventory | null): RecipeStatus
 
 export function RecipesPage({ conn }: { conn: ViamConnection }) {
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
-  const [bottles, setBottles] = useState<string[]>([]);
   const [inventory, setInventory] = useState<Inventory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ index: number | null; recipe: Recipe } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
-    Promise.all([getRecipes(conn), getBottles(conn), getInventory(conn)])
-      .then(([r, b, inv]) => {
+    Promise.all([getRecipes(conn), getInventory(conn)])
+      .then(([r, inv]) => {
         setRecipes(r);
-        setBottles(b);
         setInventory(inv);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
@@ -139,7 +137,10 @@ export function RecipesPage({ conn }: { conn: ViamConnection }) {
     save(recipes.filter((_, i) => i !== index));
   }
 
-  const ingredientNames = bottles;
+  const ingredientNames = useMemo(
+    () => (inventory ? Object.keys(inventory.ingredients).sort() : []),
+    [inventory],
+  );
 
   const sections = useMemo(() => groupRecipesBySection(recipes ?? []), [recipes]);
   const readyCount = useMemo(() => {
