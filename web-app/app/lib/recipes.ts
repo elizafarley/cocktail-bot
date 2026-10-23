@@ -31,6 +31,7 @@ export const DRINK_IMAGE_SLUGS = [
   "aperol-spritz",
   "aviation",
   "blood-moon",
+  "burn-through",
   "daiquiri",
   "draculas-blood",
   "espresso-martini",
