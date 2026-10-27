@@ -23,7 +23,7 @@ export type PourTarget = "shaker" | "glass";
 export type IceType = "crushed" | "cubed";
 export type MixMode = "shake" | "stir";
 
-export const COMMON_RECIPE_SECTIONS = ["Classics", "Halloween specials"];
+export const COMMON_RECIPE_SECTIONS = ["Classics", "Fruity", "Halloween specials"];
 export const COMMON_RECIPE_TAGS = ["Halloween", "New"];
 
 export const DRINK_IMAGE_SLUGS = [
