@@ -576,8 +576,8 @@
   background: transparent;
 }
 .whiskeyPipOn {
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--verm);
+  border-color: var(--verm);
 }
 .whiskeyActions {
   display: flex;
@@ -647,8 +647,8 @@
   cursor: pointer;
 }
 .whiskeyEditorPipOn {
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--verm);
+  border-color: var(--verm);
 }
 .whiskeyEditorPip:disabled,
 .whiskeyEditorPipOn:disabled {
