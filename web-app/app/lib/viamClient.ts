@@ -1,6 +1,6 @@
 import type { JsonValue } from "@bufbuild/protobuf";
 import type { ViamClient, RobotClient } from "@viamrobotics/sdk";
-import type { Recipe } from "./recipes";
+import type { Recipe, RecipeStep } from "./recipes";
 import type { Inventory, WhiskeyProfile } from "./inventory";
 
 const BARTENDER_SERVICE_NAME = "bartender";
@@ -339,6 +339,20 @@ export async function pourFromShaker(
   });
 }
 
+async function awaitOrder(conn: ViamConnection, startedAt: string): Promise<void> {
+  const firedAt = new Date(startedAt).getTime();
+  while (true) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const status = await getStatus(conn);
+    if (status.is_busy) continue;
+    const outcome = status.last_outcome;
+    if (outcome && new Date(outcome.ended_at).getTime() >= firedAt) {
+      if (outcome.error) throw new Error(outcome.error);
+      return;
+    }
+  }
+}
+
 export async function makeCocktail(
   conn: ViamConnection,
   drinkId: string,
@@ -354,15 +368,19 @@ export async function makeCocktail(
   const resp = await doCommand<{ started_at: string }>(conn, BARTENDER_SERVICE_NAME, {
     make_cocktail: { drink_id: drinkId, quantity: q },
   });
-  const firedAt = new Date(resp.started_at).getTime();
-  while (true) {
-    await new Promise((r) => setTimeout(r, 1000));
-    const status = await getStatus(conn);
-    if (status.is_busy) continue;
-    const outcome = status.last_outcome;
-    if (outcome && new Date(outcome.ended_at).getTime() >= firedAt) {
-      if (outcome.error) throw new Error(outcome.error);
-      return;
-    }
+  await awaitOrder(conn, resp.started_at);
+}
+
+export async function makeInlineOrder(
+  conn: ViamConnection,
+  recipe: { name: string; steps: RecipeStep[] },
+): Promise<void> {
+  if (conn.isDev) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_VERB_DELAY_MS * (recipe.steps.length + 2)));
+    return;
   }
+  const resp = await doCommand<{ started_at: string }>(conn, BARTENDER_SERVICE_NAME, {
+    make_cocktail: { recipe: recipe as unknown as import("@bufbuild/protobuf").JsonValue },
+  });
+  await awaitOrder(conn, resp.started_at);
 }

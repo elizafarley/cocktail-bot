@@ -9,21 +9,31 @@ import {
   getMachineName,
   getStatus,
   makeCocktail,
+  makeInlineOrder,
 } from "./lib/viamClient";
 import type { OrderStatus } from "./lib/viamClient";
-import type { Recipe } from "./lib/recipes";
+import type { Recipe, RecipeStep } from "./lib/recipes";
 import { recipePours } from "./lib/recipes";
-import type { Inventory } from "./lib/inventory";
-import { isAvailable } from "./lib/inventory";
+import type { Inventory, WhiskeyProfile } from "./lib/inventory";
+import { isAvailable, WHISKEY_TRAITS } from "./lib/inventory";
 import { titleCase } from "./lib/display";
 import { Nav } from "./nav";
 import styles from "./kiosk.module.css";
 
 type OrderState =
   | { kind: "idle" }
-  | { kind: "running"; recipe: Recipe }
-  | { kind: "done"; recipe: Recipe; at: number }
-  | { kind: "error"; recipe: Recipe; message: string };
+  | { kind: "running"; label: string; slug?: string }
+  | { kind: "done"; label: string; slug?: string; at: number }
+  | { kind: "error"; label: string; slug?: string; message: string };
+
+type WhiskeyEntry = {
+  ingredient: string;
+  profile: WhiskeyProfile;
+};
+
+const WHISKEY_SLUG = "whiskey-neat";
+const WHISKEY_SIZE_TASTE_OZ = 0.5;
+const WHISKEY_SIZE_POUR_OZ = 1.5;
 
 const READY_CARD_MS = 60_000;
 const MINUTES_PER_DRINK = 3;
@@ -37,6 +47,7 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   const [loadError, setLoadError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderState>({ kind: "idle" });
   const [confirming, setConfirming] = useState<{ recipe: Recipe; orderable: boolean } | null>(null);
+  const [whiskeyConfirming, setWhiskeyConfirming] = useState<WhiskeyEntry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,14 +71,46 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
 
   const startOrder = useCallback(
     async (recipe: Recipe) => {
-      setOrder({ kind: "running", recipe });
+      const label = recipe.name;
+      const slug = recipe.image;
+      setOrder({ kind: "running", label, slug });
       try {
         await makeCocktail(conn, recipe.id);
-        setOrder({ kind: "done", recipe, at: Date.now() });
+        setOrder({ kind: "done", label, slug, at: Date.now() });
       } catch (err) {
         setOrder({
           kind: "error",
-          recipe,
+          label,
+          slug,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    [conn],
+  );
+
+  const startWhiskeyOrder = useCallback(
+    async (
+      entry: WhiskeyEntry,
+      size: number,
+      serve: "neat" | "rocks",
+    ) => {
+      const label = `${titleCase(entry.ingredient)} · ${size === WHISKEY_SIZE_TASTE_OZ ? "Taste" : "Pour"} · ${serve === "neat" ? "Neat" : "On the rocks"}`;
+      const slug = WHISKEY_SLUG;
+      const steps: RecipeStep[] = [];
+      if (serve === "rocks") {
+        steps.push({ kind: "ice", type: "crushed", target: "shaker" });
+      }
+      steps.push({ kind: "pour", target: "shaker", ingredient: entry.ingredient, oz: size });
+      setOrder({ kind: "running", label, slug });
+      try {
+        await makeInlineOrder(conn, { name: label, steps });
+        setOrder({ kind: "done", label, slug, at: Date.now() });
+      } catch (err) {
+        setOrder({
+          kind: "error",
+          label,
+          slug,
           message: err instanceof Error ? err.message : String(err),
         });
       }
@@ -86,22 +129,45 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   }, [order]);
 
   const visible = recipes ? recipes.filter((r) => r.on_menu !== false) : [];
+  const whiskeys: WhiskeyEntry[] = inventory
+    ? Object.entries(inventory.ingredients)
+        .filter(
+          ([, stock]) =>
+            stock.category === "Whiskey" && stock.slot && stock.in_stock && stock.whiskey_profile,
+        )
+        .sort(([aName, aStock], [bName, bStock]) => {
+          const as = aStock.slot ?? "";
+          const bs = bStock.slot ?? "";
+          if (as !== bs) return as.localeCompare(bs);
+          return aName.localeCompare(bName);
+        })
+        .map(([ingredient, stock]) => ({ ingredient, profile: stock.whiskey_profile! }))
+    : [];
 
   const menu = loadError ? (
     <p className={styles.sub}>Could not load menu: {loadError}</p>
   ) : !recipes || !inventory ? (
     <p className={styles.loading}>Loading menu…</p>
-  ) : recipes.length === 0 ? (
+  ) : recipes.length === 0 && whiskeys.length === 0 ? (
     <p className={styles.loading}>No recipes configured.</p>
-  ) : visible.length === 0 ? (
+  ) : visible.length === 0 && whiskeys.length === 0 ? (
     <p className={styles.loading}>No drinks on the menu right now.</p>
   ) : (
-    <DrinkMenu
-      recipes={visible}
-      inventory={inventory}
-      disabled={order.kind === "running"}
-      onPick={(recipe, orderable) => setConfirming({ recipe, orderable })}
-    />
+    <>
+      <DrinkMenu
+        recipes={visible}
+        inventory={inventory}
+        disabled={order.kind === "running"}
+        onPick={(recipe, orderable) => setConfirming({ recipe, orderable })}
+      />
+      {whiskeys.length > 0 && (
+        <WhiskeyBarSection
+          whiskeys={whiskeys}
+          disabled={order.kind === "running"}
+          onPick={(entry) => setWhiskeyConfirming(entry)}
+        />
+      )}
+    </>
   );
 
   return (
@@ -150,8 +216,20 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
           />
         )}
 
+        {whiskeyConfirming && (
+          <WhiskeySheet
+            entry={whiskeyConfirming}
+            onCancel={() => setWhiskeyConfirming(null)}
+            onOrder={(size, serve) => {
+              const picked = whiskeyConfirming;
+              setWhiskeyConfirming(null);
+              startWhiskeyOrder(picked, size, serve);
+            }}
+          />
+        )}
+
         {order.kind === "error" && (
-          <OrderError recipe={order.recipe} message={order.message} onDismiss={dismissError} />
+          <OrderError label={order.label} message={order.message} onDismiss={dismissError} />
         )}
       </div>
     </>
@@ -166,13 +244,13 @@ function StatusPill({ order, connected }: { order: OrderState; connected: boolea
     text = "Reconnecting…";
   } else if (order.kind === "running") {
     dotColor = "var(--verm)";
-    text = `Making ${order.recipe.name}`;
+    text = `Making ${order.label}`;
   } else if (order.kind === "done") {
     dotColor = "var(--ok)";
-    text = `${order.recipe.name} is ready`;
+    text = `${order.label} is ready`;
   } else if (order.kind === "error") {
     dotColor = "var(--bad)";
-    text = `${order.recipe.name} needs help`;
+    text = `${order.label} needs help`;
   } else {
     text = `Nobody in line · about ${MINUTES_PER_DRINK} min per drink`;
   }
@@ -423,14 +501,14 @@ function KioskQueue({
 
       {order.kind === "done" && (
         <div className={styles.kqReady} role="status">
-          {order.recipe.name} is ready
+          {order.label} is ready
         </div>
       )}
 
       {order.kind === "running" ? (
         <div className={styles.rows}>
           <div className={styles.kqRow}>
-            <span className={styles.kqName}>{order.recipe.name}</span>
+            <span className={styles.kqName}>{order.label}</span>
             <span className={styles.kqTag}>Making now</span>
           </div>
           {currentPhaseForRunning && <p className={styles.kqNote}>{currentPhaseForRunning}</p>}
@@ -443,22 +521,197 @@ function KioskQueue({
 }
 
 function OrderError({
-  recipe,
+  label,
   message,
   onDismiss,
 }: {
-  recipe: Recipe;
+  label: string;
   message: string;
   onDismiss: () => void;
 }) {
   return (
     <div className={styles.scrim}>
       <div className={styles.sheet}>
-        <h3 className={styles.err}>{recipe.name} failed</h3>
+        <h3 className={styles.err}>{label} failed</h3>
         <p>{message}</p>
         <div className={styles.btns}>
           <button type="button" className={`${styles.btn} ${styles.btnMain}`} onClick={onDismiss}>
             Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WhiskeyBarSection({
+  whiskeys,
+  disabled,
+  onPick,
+}: {
+  whiskeys: WhiskeyEntry[];
+  disabled: boolean;
+  onPick: (entry: WhiskeyEntry) => void;
+}) {
+  return (
+    <section className={styles.menuSection} aria-label="Whiskey bar">
+      <h2>Whiskey bar</h2>
+      <p className={styles.whiskeyIntro}>Japanese whisky tasting. Start light, finish smoky.</p>
+      <ul className={styles.menu}>
+        {whiskeys.map((entry) => (
+          <li key={entry.ingredient}>
+            <WhiskeyCard entry={entry} disabled={disabled} onPick={onPick} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function WhiskeyCard({
+  entry,
+  disabled,
+  onPick,
+}: {
+  entry: WhiskeyEntry;
+  disabled: boolean;
+  onPick: (entry: WhiskeyEntry) => void;
+}) {
+  const name = titleCase(entry.ingredient);
+  const line = entry.profile.notes || entry.profile.style || "";
+  return (
+    <button
+      type="button"
+      className={styles.drink}
+      onClick={() => onPick(entry)}
+      disabled={disabled}
+    >
+      <DrinkArt slug={WHISKEY_SLUG} name={name} />
+      <div className={styles.drinkHead}>
+        <h3>{name}</h3>
+        {entry.profile.abv ? (
+          <span className={styles.tagBadge}>{entry.profile.abv}%</span>
+        ) : null}
+      </div>
+      {line && <p className={styles.ingLine}>{line}</p>}
+    </button>
+  );
+}
+
+function WhiskeySheet({
+  entry,
+  onCancel,
+  onOrder,
+}: {
+  entry: WhiskeyEntry;
+  onCancel: () => void;
+  onOrder: (size: number, serve: "neat" | "rocks") => void;
+}) {
+  const [size, setSize] = useState<number>(WHISKEY_SIZE_TASTE_OZ);
+  const [serve, setServe] = useState<"neat" | "rocks">("neat");
+  const name = titleCase(entry.ingredient);
+  const { abv, region, story, notes, profile, us, style } = entry.profile;
+  const hasMeters = profile && profile.length > 0;
+
+  return (
+    <div className={styles.scrim} onClick={onCancel}>
+      <div className={`${styles.sheet} ${styles.sheetWide}`} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.sheetArt}>
+          <DrinkArt slug={WHISKEY_SLUG} name={name} large />
+        </div>
+        <h3>{name}</h3>
+        {(abv || region) && (
+          <p className={styles.whiskeySheetMeta}>
+            {abv ? `${abv}%` : ""}
+            {abv && region ? " · " : ""}
+            {region ?? ""}
+          </p>
+        )}
+        {story && <p className={styles.whiskeySheetStory}>{story}</p>}
+        {notes && <p className={styles.whiskeySheetNotes}>{notes}</p>}
+        {hasMeters && (
+          <div className={styles.whiskeySheetMeters}>
+            {WHISKEY_TRAITS.map((trait, i) => {
+              const value = profile![i] ?? 0;
+              return (
+                <div key={trait} className={styles.whiskeySheetMeter}>
+                  <span className={styles.whiskeySheetMeterLabel}>{trait}</span>
+                  <span
+                    className={styles.whiskeySheetMeterPips}
+                    role="img"
+                    aria-label={`${trait}: ${value} out of 5`}
+                  >
+                    {[0, 1, 2, 3, 4].map((n) => (
+                      <i
+                        key={n}
+                        className={n < value ? styles.whiskeySheetPipOn : styles.whiskeySheetPip}
+                      />
+                    ))}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {us && <p className={styles.whiskeySheetUs}>{us}</p>}
+        {style && !story && (
+          <p className={styles.whiskeySheetMeta}>Style: {style}</p>
+        )}
+
+        <div className={styles.whiskeyChoice}>
+          <span className={styles.whiskeyChoiceLabel}>Size</span>
+          <div className={styles.whiskeyChoiceRow}>
+            <button
+              type="button"
+              className={size === WHISKEY_SIZE_TASTE_OZ ? styles.whiskeyChipOn : styles.whiskeyChip}
+              onClick={() => setSize(WHISKEY_SIZE_TASTE_OZ)}
+              aria-pressed={size === WHISKEY_SIZE_TASTE_OZ}
+            >
+              Taste · {WHISKEY_SIZE_TASTE_OZ} oz
+            </button>
+            <button
+              type="button"
+              className={size === WHISKEY_SIZE_POUR_OZ ? styles.whiskeyChipOn : styles.whiskeyChip}
+              onClick={() => setSize(WHISKEY_SIZE_POUR_OZ)}
+              aria-pressed={size === WHISKEY_SIZE_POUR_OZ}
+            >
+              Pour · {WHISKEY_SIZE_POUR_OZ} oz
+            </button>
+          </div>
+        </div>
+
+        <div className={styles.whiskeyChoice}>
+          <span className={styles.whiskeyChoiceLabel}>Serve</span>
+          <div className={styles.whiskeyChoiceRow}>
+            <button
+              type="button"
+              className={serve === "neat" ? styles.whiskeyChipOn : styles.whiskeyChip}
+              onClick={() => setServe("neat")}
+              aria-pressed={serve === "neat"}
+            >
+              Neat
+            </button>
+            <button
+              type="button"
+              className={serve === "rocks" ? styles.whiskeyChipOn : styles.whiskeyChip}
+              onClick={() => setServe("rocks")}
+              aria-pressed={serve === "rocks"}
+            >
+              On the rocks
+            </button>
+          </div>
+        </div>
+
+        <div className={styles.btns}>
+          <button type="button" className={`${styles.btn} ${styles.btnBig}`} onClick={onCancel}>
+            Back
+          </button>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnBig} ${styles.btnMain}`}
+            onClick={() => onOrder(size, serve)}
+          >
+            Order
           </button>
         </div>
       </div>
