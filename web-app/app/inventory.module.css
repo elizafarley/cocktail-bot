@@ -508,6 +508,153 @@
   opacity: 0.4;
   cursor: default;
 }
+.panelBtnMain {
+  background: var(--verm);
+  color: #fff;
+  border: 1px solid var(--verm);
+}
+.panelBtnMain:hover:not(:disabled) {
+  border-color: var(--verm);
+}
+
+.whiskeyView {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.whiskeyMeta {
+  margin: 0;
+  color: var(--smoke);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.whiskeyNotes {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.whiskeyStory {
+  margin: 0;
+  color: var(--smoke);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.whiskeyUs {
+  margin: 0;
+  color: var(--smoke);
+  font-size: 13px;
+  font-style: italic;
+}
+.whiskeyMeters {
+  display: grid;
+  grid-template-columns: minmax(100px, auto) 1fr;
+  row-gap: 6px;
+  column-gap: 14px;
+  align-items: center;
+  margin-top: 4px;
+}
+.whiskeyMeter {
+  display: contents;
+}
+.whiskeyMeterLabel {
+  font-size: 13px;
+  color: var(--smoke);
+}
+.whiskeyMeterPips {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.whiskeyPip,
+.whiskeyPipOn {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 5px;
+  border: 1.5px solid var(--smoke);
+  background: transparent;
+}
+.whiskeyPipOn {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.whiskeyActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.whiskeyEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.whiskeyEditorRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.whiskeyEditorLabel {
+  font-size: 13px;
+  color: var(--smoke);
+}
+.whiskeyEditor .input {
+  flex: 1 1 auto;
+  max-width: none;
+}
+.textarea {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--hair);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit;
+  background: var(--paper);
+  color: var(--ink);
+  resize: vertical;
+  line-height: 1.4;
+}
+.textarea:focus-visible {
+  outline: 2px solid var(--verm);
+  outline-offset: 2px;
+}
+.whiskeyEditorMeters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.whiskeyEditorMeterRow {
+  display: grid;
+  grid-template-columns: minmax(100px, auto) 1fr;
+  gap: 14px;
+  align-items: center;
+}
+.whiskeyEditorPips {
+  display: inline-flex;
+  gap: 8px;
+}
+.whiskeyEditorPip,
+.whiskeyEditorPipOn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1.5px solid var(--smoke);
+  background: transparent;
+  cursor: pointer;
+}
+.whiskeyEditorPipOn {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.whiskeyEditorPip:disabled,
+.whiskeyEditorPipOn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 
 .dot {
   width: 10px;

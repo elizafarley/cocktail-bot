@@ -11,7 +11,28 @@ export interface IngredientStock {
   slot?: string;
   pourer_oz?: number;
   category?: string;
+  whiskey_profile?: WhiskeyProfile;
 }
+
+export interface WhiskeyProfile {
+  abv?: number;
+  region?: string;
+  story?: string;
+  notes?: string;
+  profile?: number[];
+  us?: string;
+  style?: string;
+}
+
+export const WHISKEY_TRAITS = [
+  "Peat",
+  "Smoke",
+  "Smoothness",
+  "Sweetness",
+  "Fruitiness",
+  "Heat",
+  "Body",
+] as const;
 
 export interface Slot {
   id: string;

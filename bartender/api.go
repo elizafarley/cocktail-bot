@@ -89,10 +89,16 @@ func (b *bartender) DoCommand(ctx context.Context, cmd map[string]any) (map[stri
 	if raw, ok := cmd["update_category"]; ok {
 		return b.handleUpdateCategory(raw)
 	}
+	if raw, ok := cmd["update_whiskey_profile"]; ok {
+		return b.handleUpdateWhiskeyProfile(raw)
+	}
+	if raw, ok := cmd["clear_whiskey_profile"]; ok {
+		return b.handleClearWhiskeyProfile(raw)
+	}
 	if raw, ok := cmd["make_cocktail"]; ok {
 		return b.handleMakeCocktail(ctx, raw)
 	}
-	return nil, fmt.Errorf("unknown command, supported: prepare_order, get_queue, get_status, cancel, execute_action, pickup_pour_return, dispense_ice, pour_into_glasses, find_glass, find_and_pour, find_and_pour_from_shaker, mix, pour_from_shaker, pour_into_shaker, strain_shaker, rotate_shakers, get_recipes, get_inventory, get_bottles, update_inventory_item, delete_inventory_item, update_recipes, update_slot_assignment, clear_slot_assignment, update_pourer_oz, update_category, make_cocktail")
+	return nil, fmt.Errorf("unknown command, supported: prepare_order, get_queue, get_status, cancel, execute_action, pickup_pour_return, dispense_ice, pour_into_glasses, find_glass, find_and_pour, find_and_pour_from_shaker, mix, pour_from_shaker, pour_into_shaker, strain_shaker, rotate_shakers, get_recipes, get_inventory, get_bottles, update_inventory_item, delete_inventory_item, update_recipes, update_slot_assignment, clear_slot_assignment, update_pourer_oz, update_category, update_whiskey_profile, clear_whiskey_profile, make_cocktail")
 }
 
 func (b *bartender) handlePrepareOrder(raw any) (map[string]any, error) {
@@ -543,6 +549,7 @@ func (b *bartender) handleGetInventory() (map[string]any, error) {
 	assignments := b.dataStore.SlotAssignments()
 	pourerOz := b.dataStore.PourerOz()
 	categories := b.dataStore.Categories()
+	whiskeyProfiles := b.dataStore.WhiskeyProfiles()
 	ingredientToSlot := make(map[string]string, len(assignments))
 	for slot, ingredient := range assignments {
 		ingredientToSlot[ingredient] = slot
@@ -553,6 +560,9 @@ func (b *bartender) handleGetInventory() (map[string]any, error) {
 		}
 		if cat, ok := categories[ingredient]; ok && cat != "" {
 			entry["category"] = cat
+		}
+		if wp, ok := whiskeyProfiles[ingredient]; ok {
+			entry["whiskey_profile"] = wp
 		}
 	}
 	ingredients := make(map[string]any, len(raw.Ingredients)+len(ingredientToSlot))
@@ -648,6 +658,73 @@ func (b *bartender) handleUpdateCategory(raw any) (map[string]any, error) {
 		return nil, err
 	}
 	return map[string]any{"ingredient": ingredient, "category": category}, nil
+}
+
+func (b *bartender) handleUpdateWhiskeyProfile(raw any) (map[string]any, error) {
+	if b.dataStore == nil {
+		return nil, errDataStoreNotConfigured
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("update_whiskey_profile: expected object with 'ingredient' and 'profile', got %T", raw)
+	}
+	ingredient, _ := m["ingredient"].(string)
+	if ingredient == "" {
+		return nil, errors.New("update_whiskey_profile: 'ingredient' is required")
+	}
+	profileRaw, ok := m["profile"].(map[string]any)
+	if !ok {
+		return nil, errors.New("update_whiskey_profile: 'profile' must be an object")
+	}
+	profile := WhiskeyProfile{}
+	if v, ok := profileRaw["abv"].(float64); ok {
+		profile.ABV = v
+	}
+	if v, ok := profileRaw["region"].(string); ok {
+		profile.Region = v
+	}
+	if v, ok := profileRaw["story"].(string); ok {
+		profile.Story = v
+	}
+	if v, ok := profileRaw["notes"].(string); ok {
+		profile.Notes = v
+	}
+	if v, ok := profileRaw["us"].(string); ok {
+		profile.US = v
+	}
+	if v, ok := profileRaw["style"].(string); ok {
+		profile.Style = v
+	}
+	if arr, ok := profileRaw["profile"].([]any); ok {
+		scores := make([]int, 0, len(arr))
+		for _, x := range arr {
+			n, _ := x.(float64)
+			scores = append(scores, int(n))
+		}
+		profile.Profile = scores
+	}
+	if err := b.dataStore.UpdateWhiskeyProfile(ingredient, profile); err != nil {
+		return nil, err
+	}
+	return map[string]any{"ingredient": ingredient, "profile": profile}, nil
+}
+
+func (b *bartender) handleClearWhiskeyProfile(raw any) (map[string]any, error) {
+	if b.dataStore == nil {
+		return nil, errDataStoreNotConfigured
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("clear_whiskey_profile: expected object with 'ingredient', got %T", raw)
+	}
+	ingredient, _ := m["ingredient"].(string)
+	if ingredient == "" {
+		return nil, errors.New("clear_whiskey_profile: 'ingredient' is required")
+	}
+	if err := b.dataStore.ClearWhiskeyProfile(ingredient); err != nil {
+		return nil, err
+	}
+	return map[string]any{"ingredient": ingredient, "cleared": true}, nil
 }
 
 func (b *bartender) handleClearSlotAssignment(raw any) (map[string]any, error) {

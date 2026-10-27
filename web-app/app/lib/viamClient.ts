@@ -1,7 +1,7 @@
 import type { JsonValue } from "@bufbuild/protobuf";
 import type { ViamClient, RobotClient } from "@viamrobotics/sdk";
 import type { Recipe } from "./recipes";
-import type { Inventory } from "./inventory";
+import type { Inventory, WhiskeyProfile } from "./inventory";
 
 const BARTENDER_SERVICE_NAME = "bartender";
 
@@ -247,6 +247,27 @@ export async function updatePourerOz(
   if (conn.isDev) return { ingredient, oz };
   return doCommand(conn, BARTENDER_SERVICE_NAME, {
     update_pourer_oz: { ingredient, oz },
+  });
+}
+
+export async function updateWhiskeyProfile(
+  conn: ViamConnection,
+  ingredient: string,
+  profile: WhiskeyProfile,
+): Promise<{ ingredient: string; profile: WhiskeyProfile }> {
+  if (conn.isDev) return { ingredient, profile };
+  return doCommand(conn, BARTENDER_SERVICE_NAME, {
+    update_whiskey_profile: { ingredient, profile: profile as unknown as import("@bufbuild/protobuf").JsonValue },
+  });
+}
+
+export async function clearWhiskeyProfile(
+  conn: ViamConnection,
+  ingredient: string,
+): Promise<{ ingredient: string; cleared: boolean }> {
+  if (conn.isDev) return { ingredient, cleared: true };
+  return doCommand(conn, BARTENDER_SERVICE_NAME, {
+    clear_whiskey_profile: { ingredient },
   });
 }
 
