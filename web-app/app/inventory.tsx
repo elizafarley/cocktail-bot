@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ViamConnection } from "./lib/viamClient";
 import {
   clearSlotAssignment,
+  clearWhiskeyProfile,
   deleteInventoryItem,
   getInventory,
   getRecipes,
@@ -11,8 +12,10 @@ import {
   updateInventoryItem,
   updatePourerOz,
   updateSlotAssignment,
+  updateWhiskeyProfile,
 } from "./lib/viamClient";
-import type { Inventory } from "./lib/inventory";
+import type { Inventory, WhiskeyProfile } from "./lib/inventory";
+import { WHISKEY_TRAITS } from "./lib/inventory";
 import type { Recipe } from "./lib/recipes";
 import { recipeIngredients } from "./lib/recipes";
 import { Nav } from "./nav";
@@ -131,6 +134,32 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
     }
   }
 
+  async function saveWhiskeyProfile(ingredient: string, profile: WhiskeyProfile) {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateWhiskeyProfile(conn, ingredient, profile);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeWhiskeyProfile(ingredient: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await clearWhiskeyProfile(conn, ingredient);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const usedIn = useMemo(() => buildRecipeIndex(recipes), [recipes]);
 
   const items = inventory ? Object.entries(inventory.ingredients).sort(([a], [b]) => a.localeCompare(b)) : [];
@@ -221,6 +250,8 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                   onToggleStock={toggle}
                   onDeleteIngredient={remove}
                   onCategory={saveCategory}
+                  onSaveWhiskeyProfile={saveWhiskeyProfile}
+                  onClearWhiskeyProfile={removeWhiskeyProfile}
                   onClose={() => setSelectedSlotId(null)}
                 />
               ) : activeIngredient ? (
@@ -230,6 +261,8 @@ export function InventoryPage({ conn }: { conn: ViamConnection }) {
                   usedIn={usedIn.get(activeIngredient) ?? []}
                   busy={busy}
                   onCategory={saveCategory}
+                  onSaveWhiskeyProfile={saveWhiskeyProfile}
+                  onClearWhiskeyProfile={removeWhiskeyProfile}
                   onDeleteIngredient={remove}
                   onClose={() => setSelectedIngredient(null)}
                 />
@@ -385,10 +418,12 @@ function SlotPanel({
   onToggleStock,
   onDeleteIngredient,
   onCategory,
+  onSaveWhiskeyProfile,
+  onClearWhiskeyProfile,
   onClose,
 }: {
   slot: Slot;
-  stock: { in_stock: boolean; pourer_oz?: number; category?: string } | undefined;
+  stock: { in_stock: boolean; pourer_oz?: number; category?: string; whiskey_profile?: WhiskeyProfile } | undefined;
   ingredientNames: string[];
   usedIn: string[];
   busy: boolean;
@@ -397,6 +432,8 @@ function SlotPanel({
   onToggleStock: (ingredient: string, nextInStock: boolean) => void;
   onDeleteIngredient: (ingredient: string) => void;
   onCategory: (ingredient: string, category: string) => void;
+  onSaveWhiskeyProfile: (ingredient: string, profile: WhiskeyProfile) => void;
+  onClearWhiskeyProfile: (ingredient: string) => void;
   onClose: () => void;
 }) {
   const { letter, row } = parseSlotId(slot.id);
@@ -495,6 +532,16 @@ function SlotPanel({
           )}
         </fieldset>
       )}
+
+      {hasBottle && stock?.category === "Whiskey" && (
+        <WhiskeyProfileSection
+          ingredient={bottle!}
+          profile={stock?.whiskey_profile}
+          busy={busy}
+          onSave={onSaveWhiskeyProfile}
+          onClear={onClearWhiskeyProfile}
+        />
+      )}
       </div>
 
       {hasBottle && (
@@ -535,14 +582,18 @@ function IngredientPanel({
   usedIn,
   busy,
   onCategory,
+  onSaveWhiskeyProfile,
+  onClearWhiskeyProfile,
   onDeleteIngredient,
   onClose,
 }: {
   name: string;
-  stock: { in_stock: boolean; pourer_oz?: number; category?: string } | undefined;
+  stock: { in_stock: boolean; pourer_oz?: number; category?: string; whiskey_profile?: WhiskeyProfile } | undefined;
   usedIn: string[];
   busy: boolean;
   onCategory: (ingredient: string, category: string) => void;
+  onSaveWhiskeyProfile: (ingredient: string, profile: WhiskeyProfile) => void;
+  onClearWhiskeyProfile: (ingredient: string) => void;
   onDeleteIngredient: (ingredient: string) => void;
   onClose: () => void;
 }) {
@@ -573,6 +624,16 @@ function IngredientPanel({
               ))}
             </div>
           </div>
+        )}
+
+        {stock?.category === "Whiskey" && (
+          <WhiskeyProfileSection
+            ingredient={name}
+            profile={stock?.whiskey_profile}
+            busy={busy}
+            onSave={onSaveWhiskeyProfile}
+            onClear={onClearWhiskeyProfile}
+          />
         )}
       </div>
 
@@ -622,6 +683,274 @@ function CategoryField({
         ))}
       </select>
     </label>
+  );
+}
+
+function WhiskeyProfileSection({
+  ingredient,
+  profile,
+  busy,
+  onSave,
+  onClear,
+}: {
+  ingredient: string;
+  profile: WhiskeyProfile | undefined;
+  busy: boolean;
+  onSave: (ingredient: string, profile: WhiskeyProfile) => void;
+  onClear: (ingredient: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const hasProfile =
+    !!profile &&
+    (profile.abv ||
+      profile.region ||
+      profile.story ||
+      profile.notes ||
+      profile.us ||
+      profile.style ||
+      (profile.profile && profile.profile.length > 0));
+
+  if (editing) {
+    return (
+      <WhiskeyProfileEditor
+        initial={profile ?? {}}
+        busy={busy}
+        onCancel={() => setEditing(false)}
+        onSave={(next) => {
+          onSave(ingredient, next);
+          setEditing(false);
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className={styles.panelField}>
+      <span className={styles.panelLabel}>Tasting info</span>
+      {hasProfile ? (
+        <div className={styles.whiskeyView}>
+          {(profile!.abv || profile!.region) && (
+            <p className={styles.whiskeyMeta}>
+              {profile!.abv ? `${profile!.abv}%` : ""}
+              {profile!.abv && profile!.region ? " · " : ""}
+              {profile!.region ?? ""}
+            </p>
+          )}
+          {profile!.notes && <p className={styles.whiskeyNotes}>{profile!.notes}</p>}
+          {profile!.story && <p className={styles.whiskeyStory}>{profile!.story}</p>}
+          {profile!.profile && profile!.profile.length > 0 && (
+            <div className={styles.whiskeyMeters}>
+              {WHISKEY_TRAITS.map((trait, i) => {
+                const value = profile!.profile?.[i] ?? 0;
+                return (
+                  <div key={trait} className={styles.whiskeyMeter}>
+                    <span className={styles.whiskeyMeterLabel}>{trait}</span>
+                    <span
+                      className={styles.whiskeyMeterPips}
+                      role="img"
+                      aria-label={`${trait}: ${value} out of 5`}
+                    >
+                      {[0, 1, 2, 3, 4].map((n) => (
+                        <i key={n} className={n < value ? styles.whiskeyPipOn : styles.whiskeyPip} />
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {profile!.us && <p className={styles.whiskeyUs}>{profile!.us}</p>}
+          {profile!.style && !profile!.story && (
+            <p className={styles.whiskeyMeta}>Style: {profile!.style}</p>
+          )}
+          <div className={styles.whiskeyActions}>
+            <button
+              type="button"
+              className={styles.panelBtn}
+              onClick={() => setEditing(true)}
+              disabled={busy}
+            >
+              Edit tasting info
+            </button>
+            <button
+              type="button"
+              className={styles.panelBtnGhost}
+              onClick={() => onClear(ingredient)}
+              disabled={busy}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={styles.panelBtn}
+          onClick={() => setEditing(true)}
+          disabled={busy}
+        >
+          Add tasting info
+        </button>
+      )}
+    </div>
+  );
+}
+
+function WhiskeyProfileEditor({
+  initial,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  initial: WhiskeyProfile;
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (profile: WhiskeyProfile) => void;
+}) {
+  const [abv, setAbv] = useState<string>(initial.abv != null ? String(initial.abv) : "");
+  const [region, setRegion] = useState(initial.region ?? "");
+  const [story, setStory] = useState(initial.story ?? "");
+  const [notes, setNotes] = useState(initial.notes ?? "");
+  const [us, setUs] = useState(initial.us ?? "");
+  const [style, setStyle] = useState(initial.style ?? "");
+  const [scores, setScores] = useState<number[]>(() => {
+    const seed = initial.profile ?? [];
+    return WHISKEY_TRAITS.map((_, i) => seed[i] ?? 0);
+  });
+
+  function save() {
+    const next: WhiskeyProfile = {};
+    const abvNum = parseFloat(abv);
+    if (!Number.isNaN(abvNum) && abvNum > 0) next.abv = abvNum;
+    if (region.trim()) next.region = region.trim();
+    if (story.trim()) next.story = story.trim();
+    if (notes.trim()) next.notes = notes.trim();
+    if (us.trim()) next.us = us.trim();
+    if (style.trim()) next.style = style.trim();
+    if (scores.some((n) => n > 0)) next.profile = scores;
+    onSave(next);
+  }
+
+  return (
+    <div className={styles.panelField}>
+      <span className={styles.panelLabel}>Tasting info</span>
+      <div className={styles.whiskeyEditor}>
+        <label className={styles.whiskeyEditorRow}>
+          <span className={styles.whiskeyEditorLabel}>ABV %</span>
+          <input
+            className={styles.input}
+            type="number"
+            step="0.1"
+            min="0"
+            max="100"
+            value={abv}
+            onChange={(e) => setAbv(e.target.value)}
+            disabled={busy}
+          />
+        </label>
+        <label className={styles.whiskeyEditorRow}>
+          <span className={styles.whiskeyEditorLabel}>Region</span>
+          <input
+            className={styles.input}
+            type="text"
+            value={region}
+            onChange={(e) => setRegion(e.target.value)}
+            placeholder="Distillery, place"
+            disabled={busy}
+          />
+        </label>
+        <label className={styles.whiskeyEditorRow}>
+          <span className={styles.whiskeyEditorLabel}>Tasting notes</span>
+          <textarea
+            className={styles.textarea}
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Honey, orange peel, …"
+            disabled={busy}
+          />
+        </label>
+        <label className={styles.whiskeyEditorRow}>
+          <span className={styles.whiskeyEditorLabel}>Story</span>
+          <textarea
+            className={styles.textarea}
+            rows={3}
+            value={story}
+            onChange={(e) => setStory(e.target.value)}
+            placeholder="A couple of sentences about the whiskey"
+            disabled={busy}
+          />
+        </label>
+        <label className={styles.whiskeyEditorRow}>
+          <span className={styles.whiskeyEditorLabel}>Availability</span>
+          <input
+            className={styles.input}
+            type="text"
+            value={us}
+            onChange={(e) => setUs(e.target.value)}
+            placeholder="Easy to find in the US"
+            disabled={busy}
+          />
+        </label>
+        <label className={styles.whiskeyEditorRow}>
+          <span className={styles.whiskeyEditorLabel}>Style (fallback)</span>
+          <input
+            className={styles.input}
+            type="text"
+            value={style}
+            onChange={(e) => setStyle(e.target.value)}
+            placeholder="Bourbon, Rye, Scotch…"
+            disabled={busy}
+          />
+        </label>
+        <div className={styles.whiskeyEditorMeters}>
+          {WHISKEY_TRAITS.map((trait, i) => (
+            <div key={trait} className={styles.whiskeyEditorMeterRow}>
+              <span className={styles.whiskeyEditorLabel}>{trait}</span>
+              <div className={styles.whiskeyEditorPips}>
+                {[0, 1, 2, 3, 4].map((n) => {
+                  const value = n + 1;
+                  const on = scores[i] >= value;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      aria-label={`${trait} ${value}`}
+                      aria-pressed={on}
+                      className={on ? styles.whiskeyEditorPipOn : styles.whiskeyEditorPip}
+                      onClick={() => {
+                        const nextScores = [...scores];
+                        nextScores[i] = nextScores[i] === value ? value - 1 : value;
+                        setScores(nextScores);
+                      }}
+                      disabled={busy}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className={styles.whiskeyActions}>
+          <button
+            type="button"
+            className={`${styles.panelBtn} ${styles.panelBtnMain}`}
+            onClick={save}
+            disabled={busy}
+          >
+            Save tasting info
+          </button>
+          <button
+            type="button"
+            className={styles.panelBtnGhost}
+            onClick={onCancel}
+            disabled={busy}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

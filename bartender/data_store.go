@@ -70,12 +70,23 @@ type IngredientStock struct {
 	InStock bool `json:"in_stock"`
 }
 
+type WhiskeyProfile struct {
+	ABV     float64 `json:"abv,omitempty"`
+	Region  string  `json:"region,omitempty"`
+	Story   string  `json:"story,omitempty"`
+	Notes   string  `json:"notes,omitempty"`
+	Profile []int   `json:"profile,omitempty"`
+	US      string  `json:"us,omitempty"`
+	Style   string  `json:"style,omitempty"`
+}
+
 const (
 	recipesFileName         = "recipes.json"
 	inventoryFileName       = "inventory.json"
 	slotAssignmentsFileName = "slot_assignments.json"
 	pourerOzFileName        = "pourer_oz.json"
 	categoriesFileName      = "categories.json"
+	whiskeyProfilesFileName = "whiskey_profiles.json"
 )
 
 var errDataStoreNotConfigured = errors.New("data_dir not configured; recipes and inventory DoCommands unavailable")
@@ -88,6 +99,7 @@ type dataStore struct {
 	slotAssignments map[string]string
 	pourerOz        map[string]float64
 	categories      map[string]string
+	whiskeyProfiles map[string]WhiskeyProfile
 }
 
 func newDataStore(dir string) (*dataStore, error) {
@@ -103,6 +115,7 @@ func newDataStore(dir string) (*dataStore, error) {
 		slotAssignments: map[string]string{},
 		pourerOz:        map[string]float64{},
 		categories:      map[string]string{},
+		whiskeyProfiles: map[string]WhiskeyProfile{},
 	}
 	if err := ds.loadRecipes(); err != nil {
 		return nil, err
@@ -117,6 +130,9 @@ func newDataStore(dir string) (*dataStore, error) {
 		return nil, err
 	}
 	if err := ds.loadCategories(); err != nil {
+		return nil, err
+	}
+	if err := ds.loadWhiskeyProfiles(); err != nil {
 		return nil, err
 	}
 	return ds, nil
@@ -406,6 +422,72 @@ func (ds *dataStore) persistCategoriesLocked() error {
 		return fmt.Errorf("marshal categories: %w", err)
 	}
 	path := filepath.Join(ds.dir, categoriesFileName)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", tmp, path, err)
+	}
+	return nil
+}
+
+func (ds *dataStore) loadWhiskeyProfiles() error {
+	path := filepath.Join(ds.dir, whiskeyProfilesFileName)
+	bytes, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	var p map[string]WhiskeyProfile
+	if err := json.Unmarshal(bytes, &p); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	if p == nil {
+		p = map[string]WhiskeyProfile{}
+	}
+	ds.whiskeyProfiles = p
+	return nil
+}
+
+func (ds *dataStore) WhiskeyProfiles() map[string]WhiskeyProfile {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	out := make(map[string]WhiskeyProfile, len(ds.whiskeyProfiles))
+	for k, v := range ds.whiskeyProfiles {
+		out[k] = v
+	}
+	return out
+}
+
+func (ds *dataStore) UpdateWhiskeyProfile(ingredient string, profile WhiskeyProfile) error {
+	if ingredient == "" {
+		return errors.New("ingredient is required")
+	}
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.whiskeyProfiles[ingredient] = profile
+	return ds.persistWhiskeyProfilesLocked()
+}
+
+func (ds *dataStore) ClearWhiskeyProfile(ingredient string) error {
+	if ingredient == "" {
+		return errors.New("ingredient is required")
+	}
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	delete(ds.whiskeyProfiles, ingredient)
+	return ds.persistWhiskeyProfilesLocked()
+}
+
+func (ds *dataStore) persistWhiskeyProfilesLocked() error {
+	bytes, err := json.MarshalIndent(ds.whiskeyProfiles, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal whiskey_profiles: %w", err)
+	}
+	path := filepath.Join(ds.dir, whiskeyProfilesFileName)
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", tmp, err)
