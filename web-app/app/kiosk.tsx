@@ -675,17 +675,20 @@ function WhiskeySheet({
           <DrinkArt slug={WHISKEY_SLUG} name={name} large />
         </div>
         <h3>{name}</h3>
-        {(abv || region) && (
+        {(abv || region || style) && (
           <p className={styles.whiskeySheetMeta}>
-            {abv ? `${abv}%` : ""}
-            {abv && region ? " · " : ""}
-            {region ?? ""}
+            {abv ? `${abv}% · ` : ""}
+            {region ?? style ?? ""}
           </p>
         )}
         {story && <p className={styles.whiskeySheetStory}>{story}</p>}
-        {notes && <p className={styles.whiskeySheetNotes}>{notes}</p>}
+        {notes && (
+          <p className={styles.whiskeySheetNotes}>
+            <strong>Tasting notes:</strong> {notes}
+          </p>
+        )}
         {hasMeters && (
-          <div className={styles.whiskeySheetMeters}>
+          <div className={styles.whiskeySheetMeters} aria-label="Flavor profile">
             {WHISKEY_TRAITS.map((trait, i) => {
               const value = profile![i] ?? 0;
               return (
@@ -708,39 +711,36 @@ function WhiskeySheet({
             })}
           </div>
         )}
-        {us && <p className={styles.whiskeySheetUs}>{us}</p>}
-        {style && !story && (
-          <p className={styles.whiskeySheetMeta}>Style: {style}</p>
-        )}
+        {us && <span className={styles.whiskeySheetUs}>{us}</span>}
 
-        <div className={styles.whiskeyChoice}>
-          <span className={styles.whiskeyChoiceLabel}>Size</span>
-          <div className={styles.whiskeyChoiceRow}>
+        <div>
+          <span className={styles.whiskeySegLabel} id="lbl-size">Size</span>
+          <div className={styles.whiskeySeg} role="group" aria-labelledby="lbl-size">
             <button
               type="button"
-              className={size === WHISKEY_SIZE_TASTE_OZ ? styles.whiskeyChipOn : styles.whiskeyChip}
+              className={size === WHISKEY_SIZE_TASTE_OZ ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
               onClick={() => setSize(WHISKEY_SIZE_TASTE_OZ)}
               aria-pressed={size === WHISKEY_SIZE_TASTE_OZ}
             >
-              Taste · {WHISKEY_SIZE_TASTE_OZ} oz
+              Taste, {WHISKEY_SIZE_TASTE_OZ} oz
             </button>
             <button
               type="button"
-              className={size === WHISKEY_SIZE_POUR_OZ ? styles.whiskeyChipOn : styles.whiskeyChip}
+              className={size === WHISKEY_SIZE_POUR_OZ ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
               onClick={() => setSize(WHISKEY_SIZE_POUR_OZ)}
               aria-pressed={size === WHISKEY_SIZE_POUR_OZ}
             >
-              Pour · {WHISKEY_SIZE_POUR_OZ} oz
+              Pour, {WHISKEY_SIZE_POUR_OZ} oz
             </button>
           </div>
         </div>
 
-        <div className={styles.whiskeyChoice}>
-          <span className={styles.whiskeyChoiceLabel}>Serve</span>
-          <div className={styles.whiskeyChoiceRow}>
+        <div>
+          <span className={styles.whiskeySegLabel} id="lbl-serve">Serve it</span>
+          <div className={styles.whiskeySeg} role="group" aria-labelledby="lbl-serve">
             <button
               type="button"
-              className={serve === "neat" ? styles.whiskeyChipOn : styles.whiskeyChip}
+              className={serve === "neat" ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
               onClick={() => setServe("neat")}
               aria-pressed={serve === "neat"}
             >
@@ -748,7 +748,7 @@ function WhiskeySheet({
             </button>
             <button
               type="button"
-              className={serve === "rocks" ? styles.whiskeyChipOn : styles.whiskeyChip}
+              className={serve === "rocks" ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
               onClick={() => setServe("rocks")}
               aria-pressed={serve === "rocks"}
             >
@@ -793,17 +793,20 @@ function WhiskeyPreviewSheet({
         </div>
         <h3>{name}</h3>
         <p className={styles.whiskeyPreviewTag}>Coming soon · tap when it&rsquo;s on the bar</p>
-        {(abv || region) && (
+        {(abv || region || style) && (
           <p className={styles.whiskeySheetMeta}>
-            {abv ? `${abv}%` : ""}
-            {abv && region ? " · " : ""}
-            {region ?? ""}
+            {abv ? `${abv}% · ` : ""}
+            {region ?? style ?? ""}
           </p>
         )}
         {story && <p className={styles.whiskeySheetStory}>{story}</p>}
-        {notes && <p className={styles.whiskeySheetNotes}>{notes}</p>}
+        {notes && (
+          <p className={styles.whiskeySheetNotes}>
+            <strong>Tasting notes:</strong> {notes}
+          </p>
+        )}
         {hasMeters && (
-          <div className={styles.whiskeySheetMeters}>
+          <div className={styles.whiskeySheetMeters} aria-label="Flavor profile">
             {WHISKEY_TRAITS.map((trait, i) => {
               const value = profile![i] ?? 0;
               return (
@@ -826,10 +829,7 @@ function WhiskeyPreviewSheet({
             })}
           </div>
         )}
-        {us && <p className={styles.whiskeySheetUs}>{us}</p>}
-        {style && !story && (
-          <p className={styles.whiskeySheetMeta}>Style: {style}</p>
-        )}
+        {us && <span className={styles.whiskeySheetUs}>{us}</span>}
         <div className={styles.btns}>
           <button type="button" className={`${styles.btn} ${styles.btnBig}`} onClick={onClose}>
             Close
