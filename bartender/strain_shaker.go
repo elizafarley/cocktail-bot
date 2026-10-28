@@ -140,7 +140,7 @@ func (b *bartender) strainShaker(ctx context.Context, req strainShakerRequest) e
 	if _, err := b.gripper.Grab(ctx, nil); err != nil {
 		return fmt.Errorf("close gripper on shaker B: %w", err)
 	}
-	if err := b.attachHeld(ctx, b.cfg.HeldShakerGeometry); err != nil {
+	if err := b.attachHeld(ctx, "shaker", b.cfg.HeldShakerGeometry); err != nil {
 		return fmt.Errorf("attach held shaker B: %w", err)
 	}
 	if _, err := b.carryHeldLevel(ctx, flowSw, poseShakerACarryHover, shakerAAllow...); err != nil {

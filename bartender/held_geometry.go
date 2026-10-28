@@ -64,7 +64,7 @@ func buildHeldObjectFrame(g *HeldObjectGeometry, orientationInGripper spatialmat
 // frame's world orientation is identity, and relative-to-gripper that is the
 // inverse of the gripper's current world rotation. The attach is a no-op when
 // g is nil so caller code doesn't branch on config.
-func (b *bartender) attachHeld(ctx context.Context, g *HeldObjectGeometry) error {
+func (b *bartender) attachHeld(ctx context.Context, kind string, g *HeldObjectGeometry) error {
 	if g == nil {
 		return nil
 	}
@@ -80,12 +80,14 @@ func (b *bartender) attachHeld(ctx context.Context, g *HeldObjectGeometry) error
 		return err
 	}
 	b.heldGeomFrame = frame
+	b.heldKind = kind
 	return nil
 }
 
 // Idempotent so release paths don't branch on held-state.
 func (b *bartender) detachHeld() {
 	b.heldGeomFrame = nil
+	b.heldKind = ""
 }
 
 // Returns the rotation to apply inside the gripper's frame so a child frame's

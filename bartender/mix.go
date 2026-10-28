@@ -38,7 +38,7 @@ func (b *bartender) mix(ctx context.Context, stationSwitchName string, dwellMs i
 	if _, err := b.gripper.Grab(ctx, nil); err != nil {
 		return fmt.Errorf("close gripper on shaker: %w", err)
 	}
-	if err := b.attachHeld(ctx, b.cfg.HeldShakerGeometry); err != nil {
+	if err := b.attachHeld(ctx, "shaker", b.cfg.HeldShakerGeometry); err != nil {
 		return fmt.Errorf("attach held shaker: %w", err)
 	}
 	if _, err := b.carryHeldLevel(ctx, sw, poseShakerHomeCarryHover, shakerAllow...); err != nil {
