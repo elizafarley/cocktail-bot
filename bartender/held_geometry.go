@@ -43,15 +43,17 @@ func buildHeldObjectFrame(g *HeldObjectGeometry, orientationInGripper spatialmat
 	if g == nil {
 		return nil, nil
 	}
-	geom, err := spatialmath.NewCapsule(
-		spatialmath.NewPose(r3.Vector{X: 0, Y: 0, Z: -g.ZOffsetMM}, &spatialmath.OrientationVectorDegrees{OZ: 1}),
-		g.RadiusMM, g.LengthMM, heldObjectFrameName,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("build held-object geometry: %w", err)
-	}
 	if orientationInGripper == nil {
 		orientationInGripper = &spatialmath.OrientationVectorDegrees{OZ: 1}
+	}
+	desiredWorldPose := spatialmath.NewPose(
+		r3.Vector{X: 0, Y: 0, Z: -g.ZOffsetMM},
+		&spatialmath.OrientationVectorDegrees{OZ: 1},
+	)
+	localGeomPose := spatialmath.Compose(spatialmath.NewPoseFromOrientation(orientationInGripper), desiredWorldPose)
+	geom, err := spatialmath.NewCapsule(localGeomPose, g.RadiusMM, g.LengthMM, heldObjectFrameName)
+	if err != nil {
+		return nil, fmt.Errorf("build held-object geometry: %w", err)
 	}
 	return referenceframe.NewStaticFrameWithGeometry(heldObjectFrameName, spatialmath.NewPoseFromOrientation(orientationInGripper), geom)
 }
