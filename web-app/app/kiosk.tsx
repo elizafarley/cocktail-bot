@@ -621,7 +621,6 @@ function WhiskeyCard({
 }) {
   const name = titleCase(entry.ingredient);
   const line = entry.profile.notes || entry.profile.style || "";
-  const peatValue = entry.profile.profile?.[0] ?? 0;
   const rarity = rarityFromUs(entry.profile.us);
   return (
     <button
@@ -641,14 +640,6 @@ function WhiskeyCard({
         </span>
       </div>
       {line && <p className={styles.ingLine}>{line}</p>}
-      <div className={styles.whiskeyCardPeat}>
-        <span>Peat</span>
-        <span className={styles.whiskeyCardPeatPips} role="img" aria-label={`Peat: ${peatValue} out of 5`}>
-          {[0, 1, 2, 3, 4].map((n) => (
-            <i key={n} className={n < peatValue ? styles.whiskeyCardPipOn : styles.whiskeyCardPip} />
-          ))}
-        </span>
-      </div>
     </button>
   );
 }
