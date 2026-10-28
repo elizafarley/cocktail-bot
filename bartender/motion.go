@@ -118,23 +118,23 @@ func fetchPose(ctx context.Context, sw toggleswitch.Switch, poseName string) (*p
 	}, nil
 }
 
-// checkHoldingExpectation returns a non-nil error when the pose declares a
-// holding expectation that doesn't match what the gripper currently has
-// attached. A pose with no holding field is unconstrained (nil error).
+// checkHoldingExpectation returns a non-nil error when the pose's declared
+// holding expectation doesn't match what the gripper currently has attached.
+// Default (unset) is "empty" — a pose must opt in to being used while something
+// is held.
 //
 // Values:
 //
-//	""        — no constraint (default)
-//	"empty"   — gripper must be empty
-//	"any"     — gripper must hold something, kind doesn't matter
+//	""       — gripper must be empty (default; no field needed in config)
+//	"any"    — gripper must hold something, kind doesn't matter
 //	anything else — gripper must hold that specific kind (e.g. "bottle", "shaker")
 func (b *bartender) checkHoldingExpectation(label string, pd *poseData) error {
-	if pd == nil || pd.holding == "" {
+	if pd == nil {
 		return nil
 	}
 	actual := b.heldKind
 	switch pd.holding {
-	case "empty":
+	case "":
 		if actual != "" {
 			return fmt.Errorf("%s: pose expects empty gripper but holding %q", label, actual)
 		}
