@@ -53,7 +53,9 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 				}
 				pouredToShaker = true
 			case "glass":
-				return fmt.Errorf("step %d pour %s into glass: not yet supported", i+1, step.Ingredient)
+				if err := b.pourIntoGlass(ctx, step.Ingredient, step.Oz); err != nil {
+					return fmt.Errorf("step %d pour %s into glass: %w", i+1, step.Ingredient, err)
+				}
 			default:
 				return fmt.Errorf("step %d pour target %q is not valid", i+1, target)
 			}
