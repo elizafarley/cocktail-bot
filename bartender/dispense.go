@@ -62,10 +62,10 @@ func (b *bartender) dispenseIce(ctx context.Context, stationSwitchName string, d
 	if err := b.gripper.Open(ctx, nil); err != nil {
 		return fmt.Errorf("release shaker at deposit: %w", err)
 	}
-	if _, err := b.linearCarryToPose(ctx, sw, poseDepositDescend, iceAllow...); err != nil {
+	b.detachHeld()
+	if _, err := b.linearMoveToPose(ctx, sw, poseDepositDescend, iceAllow...); err != nil {
 		return fmt.Errorf("linear-descend below shaker rim at deposit: %w", err)
 	}
-	b.detachHeld()
 	if _, err := b.linearMoveToPose(ctx, sw, poseDepositExit, iceAllow...); err != nil {
 		return fmt.Errorf("linear-exit from deposit: %w", err)
 	}
