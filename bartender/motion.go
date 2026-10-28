@@ -314,56 +314,49 @@ func (b *bartender) pickupAllowedCollisions(key string) []AllowedCollision {
 	}
 }
 
-func (b *bartender) mixerProtectorAllowed() []AllowedCollision {
-	obstacle := b.cfg.MixerProtectorObstacle
-	if obstacle == "" {
-		return nil
-	}
+// gripperAllowedVsObstacle returns the frame pairs whose collision with the
+// named obstacle the planner should skip when the gripper is near it with
+// something in the claws. Includes the gripper body (case-gripper) alongside
+// the claws so brush-pasts of the gripper housing don't fail planning.
+func (b *bartender) gripperAllowedVsObstacle(obstacle string) []AllowedCollision {
 	return []AllowedCollision{
 		{Frame1: "claws-middle", Frame2: obstacle},
 		{Frame1: b.cfg.GripperName + ":claws", Frame2: obstacle},
+		{Frame1: b.cfg.GripperName + ":case-gripper", Frame2: obstacle},
 		{Frame1: heldObjectFrameName, Frame2: obstacle},
 	}
+}
+
+func (b *bartender) mixerProtectorAllowed() []AllowedCollision {
+	if b.cfg.MixerProtectorObstacle == "" {
+		return nil
+	}
+	return b.gripperAllowedVsObstacle(b.cfg.MixerProtectorObstacle)
 }
 
 func (b *bartender) bottlesProtectorAllowed() []AllowedCollision {
-	obstacle := b.cfg.BottlesProtectorObstacle
-	if obstacle == "" {
+	if b.cfg.BottlesProtectorObstacle == "" {
 		return nil
 	}
-	return []AllowedCollision{
-		{Frame1: "claws-middle", Frame2: obstacle},
-		{Frame1: b.cfg.GripperName + ":claws", Frame2: obstacle},
-		{Frame1: heldObjectFrameName, Frame2: obstacle},
-	}
+	return b.gripperAllowedVsObstacle(b.cfg.BottlesProtectorObstacle)
 }
 
 func (b *bartender) iceProtectorAllowed() []AllowedCollision {
-	obstacle := b.cfg.IceProtectorObstacle
-	if obstacle == "" {
+	if b.cfg.IceProtectorObstacle == "" {
 		return nil
 	}
-	return []AllowedCollision{
-		{Frame1: "claws-middle", Frame2: obstacle},
-		{Frame1: b.cfg.GripperName + ":claws", Frame2: obstacle},
-		{Frame1: heldObjectFrameName, Frame2: obstacle},
-	}
+	return b.gripperAllowedVsObstacle(b.cfg.IceProtectorObstacle)
 }
 
-// poseAllowedCollisions expands a pose's allowed_obstacles list into the three
-// gripper/claws/held-object vs. obstacle frame pairs, matching the shape of
-// the mixer / bottles / ice protector helpers.
+// poseAllowedCollisions expands a pose's allowed_obstacles list into the same
+// frame pairs the protector helpers use.
 func (b *bartender) poseAllowedCollisions(pd *poseData) []AllowedCollision {
 	if pd == nil || len(pd.allowedObstacles) == 0 {
 		return nil
 	}
-	out := make([]AllowedCollision, 0, len(pd.allowedObstacles)*3)
+	out := make([]AllowedCollision, 0, len(pd.allowedObstacles)*4)
 	for _, obstacle := range pd.allowedObstacles {
-		out = append(out,
-			AllowedCollision{Frame1: "claws-middle", Frame2: obstacle},
-			AllowedCollision{Frame1: b.cfg.GripperName + ":claws", Frame2: obstacle},
-			AllowedCollision{Frame1: heldObjectFrameName, Frame2: obstacle},
-		)
+		out = append(out, b.gripperAllowedVsObstacle(obstacle)...)
 	}
 	return out
 }
