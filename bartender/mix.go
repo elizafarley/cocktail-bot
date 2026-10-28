@@ -26,7 +26,7 @@ func (b *bartender) mix(ctx context.Context, stationSwitchName string, dwellMs i
 	if _, err := b.moveArmToPoseOnSwitch(ctx, sw, poseShakerHomeHover); err != nil {
 		return fmt.Errorf("shaker-hover: %w", err)
 	}
-	if err := b.gripper.Open(ctx, nil); err != nil {
+	if err := b.gripperOpen(ctx); err != nil {
 		return fmt.Errorf("open gripper before shaker grab: %w", err)
 	}
 	if _, err := b.linearMoveToPose(ctx, sw, poseShakerHomeApproach, shakerAllow...); err != nil {
@@ -38,7 +38,7 @@ func (b *bartender) mix(ctx context.Context, stationSwitchName string, dwellMs i
 	if _, err := b.gripper.Grab(ctx, nil); err != nil {
 		return fmt.Errorf("close gripper on shaker: %w", err)
 	}
-	if err := b.attachHeld(ctx, "shaker", b.cfg.HeldShakerGeometry); err != nil {
+	if err := b.attachHeld(ctx, b.cfg.HeldShakerGeometry); err != nil {
 		return fmt.Errorf("attach held shaker: %w", err)
 	}
 	if _, err := b.carryHeldLevel(ctx, sw, poseShakerHomeCarryHover, shakerAllow...); err != nil {
