@@ -41,13 +41,16 @@ type Config struct {
 }
 
 type PoseConf struct {
-	PoseName       string         `json:"pose_name"`
-	PoseValue      *commonpb.Pose `json:"pose_value,omitempty"`
-	Baseline       string         `json:"baseline,omitempty"`
-	Translation    *Translation   `json:"translation,omitempty"`
-	Orientation    *Orientation   `json:"orientation,omitempty"`
-	VelDegsPerSec  float64        `json:"vel_degs_per_sec,omitempty"`
-	AccDegsPerSec2 float64        `json:"acc_degs_per_sec2,omitempty"`
+	PoseName                        string         `json:"pose_name"`
+	PoseValue                       *commonpb.Pose `json:"pose_value,omitempty"`
+	Baseline                        string         `json:"baseline,omitempty"`
+	Translation                     *Translation   `json:"translation,omitempty"`
+	Orientation                     *Orientation   `json:"orientation,omitempty"`
+	VelDegsPerSec                   float64        `json:"vel_degs_per_sec,omitempty"`
+	AccDegsPerSec2                  float64        `json:"acc_degs_per_sec2,omitempty"`
+	LineToleranceMm                 float64        `json:"line_tolerance_mm,omitempty"`
+	OrientationToleranceDegs        float64        `json:"orientation_tolerance_degs,omitempty"`
+	NoSpillOrientationToleranceDegs float64        `json:"no_spill_orientation_tolerance_degs,omitempty"`
 }
 
 type Translation struct {
@@ -66,11 +69,14 @@ type Orientation struct {
 
 // poseValues holds the resolved absolute coordinates for a pose.
 type poseValues struct {
-	X, Y, Z        float64
-	OX, OY, OZ     float64
-	Theta          float64
-	VelDegsPerSec  float64
-	AccDegsPerSec2 float64
+	X, Y, Z                         float64
+	OX, OY, OZ                      float64
+	Theta                           float64
+	VelDegsPerSec                   float64
+	AccDegsPerSec2                  float64
+	LineToleranceMm                 float64
+	OrientationToleranceDegs        float64
+	NoSpillOrientationToleranceDegs float64
 }
 
 func (cfg *Config) Validate(path string) ([]string, []string, error) {
@@ -257,6 +263,9 @@ func resolvePoses(poses []PoseConf) []poseValues {
 		}
 		resolved[i].VelDegsPerSec = p.VelDegsPerSec
 		resolved[i].AccDegsPerSec2 = p.AccDegsPerSec2
+		resolved[i].LineToleranceMm = p.LineToleranceMm
+		resolved[i].OrientationToleranceDegs = p.OrientationToleranceDegs
+		resolved[i].NoSpillOrientationToleranceDegs = p.NoSpillOrientationToleranceDegs
 		done[i] = true
 	}
 
@@ -330,6 +339,15 @@ func (s *multiPosesExecutionSwitch) DoCommand(ctx context.Context, cmd map[strin
 				}
 				if rp.AccDegsPerSec2 > 0 {
 					resp["acc_degs_per_sec2"] = rp.AccDegsPerSec2
+				}
+				if rp.LineToleranceMm > 0 {
+					resp["line_tolerance_mm"] = rp.LineToleranceMm
+				}
+				if rp.OrientationToleranceDegs > 0 {
+					resp["orientation_tolerance_degs"] = rp.OrientationToleranceDegs
+				}
+				if rp.NoSpillOrientationToleranceDegs > 0 {
+					resp["no_spill_orientation_tolerance_degs"] = rp.NoSpillOrientationToleranceDegs
 				}
 				return resp, nil
 			}
