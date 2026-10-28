@@ -159,6 +159,13 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
     <p className={styles.loading}>No drinks on the menu right now.</p>
   ) : (
     <>
+      {availableWhiskeys.length > 0 && (
+        <WhiskeyBarSection
+          whiskeys={availableWhiskeys}
+          disabled={order.kind === "running"}
+          onPick={(entry) => setWhiskeyConfirming(entry)}
+        />
+      )}
       <DrinkMenu
         recipes={visible}
         inventory={inventory}
@@ -167,13 +174,6 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
         onPick={(recipe, orderable) => setConfirming({ recipe, orderable })}
         onPickPendingWhiskey={(entry) => setWhiskeyPreview(entry)}
       />
-      {availableWhiskeys.length > 0 && (
-        <WhiskeyBarSection
-          whiskeys={availableWhiskeys}
-          disabled={order.kind === "running"}
-          onPick={(entry) => setWhiskeyConfirming(entry)}
-        />
-      )}
     </>
   );
 
