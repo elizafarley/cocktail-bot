@@ -38,10 +38,14 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 	// pour goes straight into the serving glass. Otherwise all pours fill the
 	// shaker and the shaker gets served at the end.
 	usesShaker := false
+	strained := false
 	for _, s := range steps {
-		if s.Kind == "ice" || s.Kind == "mix" || s.Kind == "strain" {
+		switch s.Kind {
+		case "ice", "mix", "strain":
 			usesShaker = true
-			break
+		}
+		if s.Kind == "strain" {
+			strained = true
 		}
 	}
 	for i, step := range steps {
@@ -100,13 +104,30 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 	}
 
 	if usesShaker {
+		// strain leaves shaker-A held and ready to pour; without a strain
+		// step the shaker is sitting at shaker-home with the ice (and
+		// whatever got poured in), so pick it up before serving.
+		if !strained {
+			shakerSw, err := b.findSwitch(d.ShakerSource)
+			if err != nil {
+				return fmt.Errorf("shaker source switch %q: %w", d.ShakerSource, err)
+			}
+			b.status.setPhase("Picking up shaker")
+			if err := b.pickupShaker(ctx, shakerSw, "shaker-home"); err != nil {
+				return fmt.Errorf("pickup shaker before serve: %w", err)
+			}
+		}
 		b.status.setPhase("Serving")
 		if err := b.pourFromShaker(ctx, d.ServeStation, d.ServeMs); err != nil {
 			return fmt.Errorf("serve: %w", err)
 		}
-		b.status.setPhase("Resetting")
-		if err := b.rotateShakers(ctx, d.StrainFlow); err != nil {
-			return fmt.Errorf("rotate: %w", err)
+		// rotateShakers resets the strain-flow bookkeeping (shaker-B back to
+		// shaker-A); only relevant when a strain actually ran.
+		if strained {
+			b.status.setPhase("Resetting")
+			if err := b.rotateShakers(ctx, d.StrainFlow); err != nil {
+				return fmt.Errorf("rotate: %w", err)
+			}
 		}
 	}
 	if _, err := b.moveArmToPose(ctx, poseHome); err != nil {
