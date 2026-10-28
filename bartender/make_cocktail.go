@@ -109,5 +109,8 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 			return fmt.Errorf("rotate: %w", err)
 		}
 	}
+	if _, err := b.moveArmToPose(ctx, poseHome); err != nil {
+		return fmt.Errorf("park at home: %w", err)
+	}
 	return nil
 }
