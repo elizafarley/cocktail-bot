@@ -32,6 +32,8 @@ func (g *HeldObjectGeometry) Validate(path string) error {
 
 const heldObjectFrameName = "held-object"
 
+const gripPointFrameName = "grip-point"
+
 // buildHeldObjectFrame attaches the held cylinder to the gripper with an
 // orientation offset so the frame's +Z axis aligns with the object's long axis
 // in the world at attach time. The no-spill carry constraint applies to this
