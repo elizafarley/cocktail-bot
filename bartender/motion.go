@@ -289,6 +289,18 @@ func (b *bartender) bottlesProtectorAllowed() []AllowedCollision {
 	}
 }
 
+func (b *bartender) iceProtectorAllowed() []AllowedCollision {
+	obstacle := b.cfg.IceProtectorObstacle
+	if obstacle == "" {
+		return nil
+	}
+	return []AllowedCollision{
+		{Frame1: "claws-middle", Frame2: obstacle},
+		{Frame1: b.cfg.GripperName + ":claws", Frame2: obstacle},
+		{Frame1: heldObjectFrameName, Frame2: obstacle},
+	}
+}
+
 // Straight-line through space; the empty-handed grab/release paths that risk
 // knocking the bottle laterally. For moves WITH a bottle in hand, use
 // linearCarryToPose so the no-spill orientation constraint is applied too.

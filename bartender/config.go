@@ -47,6 +47,7 @@ type Config struct {
 	PourIntoShakerDwellMs    int               `json:"pour_into_shaker_dwell_ms,omitempty"`
 	MixerProtectorObstacle   string            `json:"mixer_protector_obstacle,omitempty"`
 	BottlesProtectorObstacle string            `json:"bottles_protector_obstacle,omitempty"`
+	IceProtectorObstacle     string            `json:"ice_protector_obstacle,omitempty"`
 	SlotNames                []string          `json:"slot_names,omitempty"`
 	// Incoming webhook URL for order outcome alerts; empty disables.
 	SlackWebhookURL string `json:"slack_webhook_url,omitempty"`
