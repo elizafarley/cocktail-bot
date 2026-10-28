@@ -51,6 +51,7 @@ type PoseConf struct {
 	LineToleranceMm                 float64        `json:"line_tolerance_mm,omitempty"`
 	OrientationToleranceDegs        float64        `json:"orientation_tolerance_degs,omitempty"`
 	NoSpillOrientationToleranceDegs float64        `json:"no_spill_orientation_tolerance_degs,omitempty"`
+	AllowedObstacles                []string       `json:"allowed_obstacles,omitempty"`
 }
 
 type Translation struct {
@@ -77,6 +78,7 @@ type poseValues struct {
 	LineToleranceMm                 float64
 	OrientationToleranceDegs        float64
 	NoSpillOrientationToleranceDegs float64
+	AllowedObstacles                []string
 }
 
 func (cfg *Config) Validate(path string) ([]string, []string, error) {
@@ -266,6 +268,9 @@ func resolvePoses(poses []PoseConf) []poseValues {
 		resolved[i].LineToleranceMm = p.LineToleranceMm
 		resolved[i].OrientationToleranceDegs = p.OrientationToleranceDegs
 		resolved[i].NoSpillOrientationToleranceDegs = p.NoSpillOrientationToleranceDegs
+		if len(p.AllowedObstacles) > 0 {
+			resolved[i].AllowedObstacles = append([]string(nil), p.AllowedObstacles...)
+		}
 		done[i] = true
 	}
 
@@ -348,6 +353,13 @@ func (s *multiPosesExecutionSwitch) DoCommand(ctx context.Context, cmd map[strin
 				}
 				if rp.NoSpillOrientationToleranceDegs > 0 {
 					resp["no_spill_orientation_tolerance_degs"] = rp.NoSpillOrientationToleranceDegs
+				}
+				if len(rp.AllowedObstacles) > 0 {
+					obstacles := make([]any, len(rp.AllowedObstacles))
+					for i, o := range rp.AllowedObstacles {
+						obstacles[i] = o
+					}
+					resp["allowed_obstacles"] = obstacles
 				}
 				return resp, nil
 			}
