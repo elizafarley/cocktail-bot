@@ -30,11 +30,41 @@ func orderIDFromCtx(ctx context.Context) string {
 }
 
 type poseData struct {
-	pose           spatialmath.Pose
-	refFrame       string
-	componentName  string
-	velDegsPerSec  float64
-	accDegsPerSec2 float64
+	pose                            spatialmath.Pose
+	refFrame                        string
+	componentName                   string
+	velDegsPerSec                   float64
+	accDegsPerSec2                  float64
+	lineToleranceMm                 float64
+	orientationToleranceDegs        float64
+	noSpillOrientationToleranceDegs float64
+}
+
+const (
+	defaultLineToleranceMm                 = 1.0
+	defaultLinearOrientationToleranceDegs  = 5.0
+	defaultNoSpillOrientationToleranceDegs = 15.0
+)
+
+func (pd *poseData) linearLineToleranceMm() float64 {
+	if pd.lineToleranceMm > 0 {
+		return pd.lineToleranceMm
+	}
+	return defaultLineToleranceMm
+}
+
+func (pd *poseData) linearOrientationToleranceDegs() float64 {
+	if pd.orientationToleranceDegs > 0 {
+		return pd.orientationToleranceDegs
+	}
+	return defaultLinearOrientationToleranceDegs
+}
+
+func (pd *poseData) noSpillToleranceDegs() float64 {
+	if pd.noSpillOrientationToleranceDegs > 0 {
+		return pd.noSpillOrientationToleranceDegs
+	}
+	return defaultNoSpillOrientationToleranceDegs
 }
 
 // DoCommand contract on the switcher: get_pose_by_name → {x, y, z, o_x, o_y, o_z, theta, reference_frame, component_name}.
@@ -57,15 +87,21 @@ func fetchPose(ctx context.Context, sw toggleswitch.Switch, poseName string) (*p
 	componentName, _ := resp["component_name"].(string)
 	vel, _ := resp["vel_degs_per_sec"].(float64)
 	acc, _ := resp["acc_degs_per_sec2"].(float64)
+	lineTol, _ := resp["line_tolerance_mm"].(float64)
+	oriTol, _ := resp["orientation_tolerance_degs"].(float64)
+	noSpillTol, _ := resp["no_spill_orientation_tolerance_degs"].(float64)
 	return &poseData{
 		pose: spatialmath.NewPose(
 			r3.Vector{X: x, Y: y, Z: z},
 			&spatialmath.OrientationVectorDegrees{OX: oX, OY: oY, OZ: oZ, Theta: theta},
 		),
-		refFrame:       refFrame,
-		componentName:  componentName,
-		velDegsPerSec:  vel,
-		accDegsPerSec2: acc,
+		refFrame:                        refFrame,
+		componentName:                   componentName,
+		velDegsPerSec:                   vel,
+		accDegsPerSec2:                  acc,
+		lineToleranceMm:                 lineTol,
+		orientationToleranceDegs:        oriTol,
+		noSpillOrientationToleranceDegs: noSpillTol,
 	}, nil
 }
 
@@ -311,13 +347,14 @@ func (b *bartender) linearMoveToPose(ctx context.Context, sw toggleswitch.Switch
 	}
 	label := sw.Name().ShortName() + ":" + poseName + ":linear"
 	constraints := &motionplan.Constraints{
-		LinearConstraint: []motionplan.LinearConstraint{{LineToleranceMm: 1, OrientationToleranceDegs: 5}},
+		LinearConstraint: []motionplan.LinearConstraint{{
+			LineToleranceMm:          pd.linearLineToleranceMm(),
+			OrientationToleranceDegs: pd.linearOrientationToleranceDegs(),
+		}},
 	}
 	constraints = b.withAllowedCollisions(constraints, allowed)
 	return b.moveToResolvedPose(ctx, pd, label, constraints, nil)
 }
-
-const noSpillOrientationToleranceDegs = 15
 
 // Straight-line + no-spill constraint. For lifting/lowering a bottle held in the
 // gripper: linear so the planner doesn't swing the bottle sideways, orientation
@@ -329,9 +366,12 @@ func (b *bartender) linearCarryToPose(ctx context.Context, sw toggleswitch.Switc
 	}
 	label := sw.Name().ShortName() + ":" + poseName + ":linear-carry"
 	constraints := &motionplan.Constraints{
-		LinearConstraint: []motionplan.LinearConstraint{{LineToleranceMm: 1, OrientationToleranceDegs: 5}},
+		LinearConstraint: []motionplan.LinearConstraint{{
+			LineToleranceMm:          pd.linearLineToleranceMm(),
+			OrientationToleranceDegs: pd.linearOrientationToleranceDegs(),
+		}},
 		OrientationConstraint: []motionplan.OrientationConstraint{
-			{OrientationToleranceDegs: noSpillOrientationToleranceDegs, IgnoreTheta: true},
+			{OrientationToleranceDegs: pd.noSpillToleranceDegs(), IgnoreTheta: true},
 		},
 	}
 	constraints = b.withAllowedCollisions(constraints, allowed)
@@ -352,7 +392,7 @@ func (b *bartender) carryHeldLevel(ctx context.Context, sw toggleswitch.Switch, 
 func (b *bartender) carryHeldLevelToResolved(ctx context.Context, pd *poseData, label string, allowed ...AllowedCollision) (time.Duration, error) {
 	constraints := &motionplan.Constraints{
 		OrientationConstraint: []motionplan.OrientationConstraint{
-			{OrientationToleranceDegs: noSpillOrientationToleranceDegs, IgnoreTheta: true},
+			{OrientationToleranceDegs: pd.noSpillToleranceDegs(), IgnoreTheta: true},
 		},
 	}
 	constraints = b.withAllowedCollisions(constraints, allowed)
