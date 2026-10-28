@@ -39,7 +39,6 @@ type poseData struct {
 	orientationToleranceDegs        float64
 	noSpillOrientationToleranceDegs float64
 	allowedObstacles                []string
-	holding                         string
 }
 
 const (
@@ -100,7 +99,6 @@ func fetchPose(ctx context.Context, sw toggleswitch.Switch, poseName string) (*p
 			}
 		}
 	}
-	holding, _ := resp["holding"].(string)
 	return &poseData{
 		pose: spatialmath.NewPose(
 			r3.Vector{X: x, Y: y, Z: z},
@@ -114,40 +112,7 @@ func fetchPose(ctx context.Context, sw toggleswitch.Switch, poseName string) (*p
 		orientationToleranceDegs:        oriTol,
 		noSpillOrientationToleranceDegs: noSpillTol,
 		allowedObstacles:                allowedObstacles,
-		holding:                         holding,
 	}, nil
-}
-
-// checkHoldingExpectation returns a non-nil error when the pose's declared
-// holding expectation doesn't match what the gripper currently has attached.
-// Default (unset) is "empty" — a pose must opt in to being used while something
-// is held.
-//
-// Values:
-//
-//	""       — gripper must be empty (default; no field needed in config)
-//	"any"    — gripper must hold something, kind doesn't matter
-//	anything else — gripper must hold that specific kind (e.g. "bottle", "shaker")
-func (b *bartender) checkHoldingExpectation(label string, pd *poseData) error {
-	if pd == nil {
-		return nil
-	}
-	actual := b.heldKind
-	switch pd.holding {
-	case "":
-		if actual != "" {
-			return fmt.Errorf("%s: pose expects empty gripper but holding %q", label, actual)
-		}
-	case "any":
-		if actual == "" {
-			return fmt.Errorf("%s: pose expects something held but gripper is empty", label)
-		}
-	default:
-		if actual != pd.holding {
-			return fmt.Errorf("%s: pose expects holding %q but gripper has %q", label, pd.holding, actual)
-		}
-	}
-	return nil
 }
 
 func (b *bartender) resolvePose(ctx context.Context, poseName string) (*poseData, toggleswitch.Switch, error) {
@@ -235,9 +200,6 @@ func (b *bartender) savePlan(ctx context.Context, req *armplanning.PlanRequest, 
 }
 
 func (b *bartender) moveToResolvedPose(ctx context.Context, pd *poseData, label string, constraints *motionplan.Constraints, opts *arm.MoveOptions) (time.Duration, error) {
-	if err := b.checkHoldingExpectation(label, pd); err != nil {
-		return 0, err
-	}
 	if opts == nil {
 		opts = moveOptionsFromCfg(pd.velDegsPerSec, pd.accDegsPerSec2)
 	}
@@ -514,9 +476,6 @@ func (b *bartender) carryHeldLevelToResolved(ctx context.Context, pd *poseData, 
 // orientation constraint bounds the shaker's own long axis rather than the
 // gripper's tool axis. Falls back to moveToResolvedPose when nothing is held.
 func (b *bartender) moveHeldToResolvedPose(ctx context.Context, pd *poseData, label string, constraints *motionplan.Constraints, opts *arm.MoveOptions) (time.Duration, error) {
-	if err := b.checkHoldingExpectation(label, pd); err != nil {
-		return 0, err
-	}
 	if opts == nil {
 		opts = moveOptionsFromCfg(pd.velDegsPerSec, pd.accDegsPerSec2)
 	}

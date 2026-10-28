@@ -52,7 +52,6 @@ type PoseConf struct {
 	OrientationToleranceDegs        float64        `json:"orientation_tolerance_degs,omitempty"`
 	NoSpillOrientationToleranceDegs float64        `json:"no_spill_orientation_tolerance_degs,omitempty"`
 	AllowedObstacles                []string       `json:"allowed_obstacles,omitempty"`
-	Holding                         string         `json:"holding,omitempty"`
 }
 
 type Translation struct {
@@ -80,7 +79,6 @@ type poseValues struct {
 	OrientationToleranceDegs        float64
 	NoSpillOrientationToleranceDegs float64
 	AllowedObstacles                []string
-	Holding                         string
 }
 
 func (cfg *Config) Validate(path string) ([]string, []string, error) {
@@ -273,7 +271,6 @@ func resolvePoses(poses []PoseConf) []poseValues {
 		if len(p.AllowedObstacles) > 0 {
 			resolved[i].AllowedObstacles = append([]string(nil), p.AllowedObstacles...)
 		}
-		resolved[i].Holding = p.Holding
 		done[i] = true
 	}
 
@@ -363,9 +360,6 @@ func (s *multiPosesExecutionSwitch) DoCommand(ctx context.Context, cmd map[strin
 						obstacles[i] = o
 					}
 					resp["allowed_obstacles"] = obstacles
-				}
-				if rp.Holding != "" {
-					resp["holding"] = rp.Holding
 				}
 				return resp, nil
 			}

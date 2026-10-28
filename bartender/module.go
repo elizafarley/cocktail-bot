@@ -40,7 +40,6 @@ type bartender struct {
 	fsSvc         framesystem.Service
 	poseSwitches  []toggleswitch.Switch
 	heldGeomFrame referenceframe.Frame
-	heldKind      string
 	filesaver     *filesaver.Saver
 	queue         *order.Queue
 	orderSink     orderSensorSink
