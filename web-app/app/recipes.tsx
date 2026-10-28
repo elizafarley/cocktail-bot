@@ -15,7 +15,7 @@ import type { ViamConnection } from "./lib/viamClient";
 import { getInventory, getRecipes, updateRecipes } from "./lib/viamClient";
 import type { Recipe } from "./lib/recipes";
 import { COMMON_RECIPE_SECTIONS, COMMON_RECIPE_TAGS, DRINK_IMAGE_SLUGS, recipePours, stepsFor } from "./lib/recipes";
-import type { RecipeStep, PourTarget } from "./lib/recipes";
+import type { RecipeStep } from "./lib/recipes";
 import type { Inventory } from "./lib/inventory";
 import { isAvailable } from "./lib/inventory";
 import { Nav } from "./nav";
@@ -380,7 +380,6 @@ function StepBody({
     const stock = inventory?.ingredients[step.ingredient];
     const slot = stock?.slot ? slotLabel(stock.slot) : null;
     const tilts = tiltsLine(step.oz, stock?.pourer_oz);
-    const target = step.target ?? "shaker";
     return (
       <>
         <div className={styles.stepPourRow}>
@@ -425,18 +424,6 @@ function StepBody({
             onChange={(e) => onUpdate({ oz: Math.max(0, Number(e.target.value)) })}
             aria-label="Ounces"
           />
-        </div>
-        <div className={styles.stepPourTargetRow}>
-          <label className={styles.stepTargetLabel}>Into</label>
-          <select
-            className={styles.select}
-            value={target}
-            onChange={(e) => onUpdate({ target: e.target.value as PourTarget })}
-            aria-label="Pour target"
-          >
-            <option value="shaker">Shaker</option>
-            <option value="glass">Glass</option>
-          </select>
         </div>
         {tilts && <span className={styles.pourTilt}>{tilts}</span>}
         {!tilts && slot && <span className={styles.pourTilt}>Lives in {slot}</span>}
@@ -516,8 +503,8 @@ function RecipeEditor({
       existing.length > 0
         ? existing
         : [
-            { kind: "ice", type: "crushed", target: "shaker" } as RecipeStep,
-            { kind: "pour", target: "shaker", ingredient: ingredientNames[0] ?? "", oz: 1 } as RecipeStep,
+            { kind: "ice", type: "crushed" } as RecipeStep,
+            { kind: "pour", ingredient: ingredientNames[0] ?? "", oz: 1 } as RecipeStep,
             { kind: "mix", mode: "shake" } as RecipeStep,
             { kind: "strain" } as RecipeStep,
           ];
@@ -550,9 +537,9 @@ function RecipeEditor({
   function addStep(kind: RecipeStep["kind"]) {
     const step: RecipeStep =
       kind === "pour"
-        ? { kind: "pour", target: "shaker", ingredient: ingredientNames[0] ?? "", oz: 1 }
+        ? { kind: "pour", ingredient: ingredientNames[0] ?? "", oz: 1 }
         : kind === "ice"
-        ? { kind: "ice", type: "crushed", target: "shaker" }
+        ? { kind: "ice", type: "crushed" }
         : kind === "mix"
         ? { kind: "mix", mode: "shake" }
         : { kind: "strain" };

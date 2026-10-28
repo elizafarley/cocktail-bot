@@ -28,7 +28,6 @@ type RecipeStep struct {
 	Kind       string  `json:"kind"`
 	Ingredient string  `json:"ingredient,omitempty"`
 	Oz         float64 `json:"oz,omitempty"`
-	Target     string  `json:"target,omitempty"`
 	IceType    string  `json:"type,omitempty"`
 	MixMode    string  `json:"mode,omitempty"`
 }
@@ -43,10 +42,10 @@ func stepsFor(r Recipe) []RecipeStep {
 	}
 	out := make([]RecipeStep, 0, len(r.Pours)+3)
 	if stepEnabled(r.CrushedIce) {
-		out = append(out, RecipeStep{Kind: "ice", IceType: "crushed", Target: "shaker"})
+		out = append(out, RecipeStep{Kind: "ice", IceType: "crushed"})
 	}
 	for _, p := range r.Pours {
-		out = append(out, RecipeStep{Kind: "pour", Target: "shaker", Ingredient: p.Ingredient, Oz: p.Oz})
+		out = append(out, RecipeStep{Kind: "pour", Ingredient: p.Ingredient, Oz: p.Oz})
 	}
 	if stepEnabled(r.Shake) {
 		out = append(out, RecipeStep{Kind: "mix", MixMode: "shake"})

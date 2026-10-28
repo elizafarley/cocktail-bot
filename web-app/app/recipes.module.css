@@ -450,17 +450,6 @@
   grid-template-columns: 1fr 96px;
   gap: 8px;
 }
-.stepPourTargetRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 6px;
-}
-.stepTargetLabel {
-  font-size: 13px;
-  color: var(--smoke);
-  flex: 0 0 auto;
-}
 .stepLabel {
   display: block;
   padding: 10px 0;

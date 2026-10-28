@@ -34,42 +34,39 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 	}
 
 	steps := stepsFor(*recipe)
-	pouredToShaker := false
+	// A drink that never involves the shaker (no ice/mix/strain) implies every
+	// pour goes straight into the serving glass. Otherwise all pours fill the
+	// shaker and the shaker gets served at the end.
+	usesShaker := false
+	for _, s := range steps {
+		if s.Kind == "ice" || s.Kind == "mix" || s.Kind == "strain" {
+			usesShaker = true
+			break
+		}
+	}
 	for i, step := range steps {
 		switch step.Kind {
 		case "pour":
 			if step.Ingredient == "" {
 				return fmt.Errorf("step %d: pour ingredient is required", i+1)
 			}
-			target := step.Target
-			if target == "" {
-				target = "shaker"
-			}
 			b.status.setPhase(fmt.Sprintf("Pouring %s (step %d of %d)", step.Ingredient, i+1, len(steps)))
-			switch target {
-			case "shaker":
+			if usesShaker {
 				if err := b.pourIntoShaker(ctx, step.Ingredient, step.Oz); err != nil {
 					return fmt.Errorf("step %d pour %s into shaker: %w", i+1, step.Ingredient, err)
 				}
-				pouredToShaker = true
-			case "glass":
+			} else {
 				if err := b.pourIntoGlass(ctx, step.Ingredient, step.Oz); err != nil {
 					return fmt.Errorf("step %d pour %s into glass: %w", i+1, step.Ingredient, err)
 				}
-			default:
-				return fmt.Errorf("step %d pour target %q is not valid", i+1, target)
 			}
 		case "ice":
 			iceType := step.IceType
 			if iceType == "" {
 				iceType = "crushed"
 			}
-			target := step.Target
-			if target == "" {
-				target = "shaker"
-			}
-			if iceType != "crushed" || target != "shaker" {
-				return fmt.Errorf("step %d ice (%s into %s): not yet supported", i+1, iceType, target)
+			if iceType != "crushed" {
+				return fmt.Errorf("step %d ice type %q: not yet supported", i+1, iceType)
 			}
 			b.status.setPhase("Dispensing ice")
 			if err := b.dispenseIce(ctx, d.IceStation, d.IceDwellMs); err != nil {
@@ -102,7 +99,7 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 		}
 	}
 
-	if pouredToShaker {
+	if usesShaker {
 		b.status.setPhase("Serving")
 		if err := b.pourFromShaker(ctx, d.ServeStation, d.ServeMs); err != nil {
 			return fmt.Errorf("serve: %w", err)

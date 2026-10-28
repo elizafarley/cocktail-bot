@@ -14,12 +14,11 @@ export interface Recipe {
 }
 
 export type RecipeStep =
-  | { kind: "pour"; target?: PourTarget; ingredient: string; oz: number }
-  | { kind: "ice"; type?: IceType; target?: PourTarget }
+  | { kind: "pour"; ingredient: string; oz: number }
+  | { kind: "ice"; type?: IceType }
   | { kind: "mix"; mode?: MixMode }
   | { kind: "strain" };
 
-export type PourTarget = "shaker" | "glass";
 export type IceType = "crushed" | "cubed";
 export type MixMode = "shake" | "stir";
 
@@ -62,10 +61,10 @@ export function stepsFor(recipe: Recipe): RecipeStep[] {
   if (recipe.steps && recipe.steps.length > 0) return recipe.steps;
   const out: RecipeStep[] = [];
   if (recipe.crushed_ice ?? true) {
-    out.push({ kind: "ice", type: "crushed", target: "shaker" });
+    out.push({ kind: "ice", type: "crushed" });
   }
   for (const pour of recipe.pours ?? []) {
-    out.push({ kind: "pour", target: "shaker", ingredient: pour.ingredient, oz: pour.oz });
+    out.push({ kind: "pour", ingredient: pour.ingredient, oz: pour.oz });
   }
   if (recipe.shake ?? true) {
     out.push({ kind: "mix", mode: "shake" });
@@ -76,10 +75,10 @@ export function stepsFor(recipe: Recipe): RecipeStep[] {
   return out;
 }
 
-export function recipePours(recipe: Recipe): { ingredient: string; oz: number; target: PourTarget }[] {
+export function recipePours(recipe: Recipe): { ingredient: string; oz: number }[] {
   return stepsFor(recipe)
     .filter((s): s is Extract<RecipeStep, { kind: "pour" }> => s.kind === "pour")
-    .map((s) => ({ ingredient: s.ingredient, oz: s.oz, target: s.target ?? "shaker" }));
+    .map((s) => ({ ingredient: s.ingredient, oz: s.oz }));
 }
 
 export function recipeIngredients(recipe: Recipe): string[] {
