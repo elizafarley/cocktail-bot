@@ -38,6 +38,7 @@ type poseData struct {
 	lineToleranceMm                 float64
 	orientationToleranceDegs        float64
 	noSpillOrientationToleranceDegs float64
+	allowedObstacles                []string
 }
 
 const (
@@ -90,6 +91,14 @@ func fetchPose(ctx context.Context, sw toggleswitch.Switch, poseName string) (*p
 	lineTol, _ := resp["line_tolerance_mm"].(float64)
 	oriTol, _ := resp["orientation_tolerance_degs"].(float64)
 	noSpillTol, _ := resp["no_spill_orientation_tolerance_degs"].(float64)
+	var allowedObstacles []string
+	if raw, ok := resp["allowed_obstacles"].([]any); ok {
+		for _, v := range raw {
+			if s, ok := v.(string); ok && s != "" {
+				allowedObstacles = append(allowedObstacles, s)
+			}
+		}
+	}
 	return &poseData{
 		pose: spatialmath.NewPose(
 			r3.Vector{X: x, Y: y, Z: z},
@@ -102,6 +111,7 @@ func fetchPose(ctx context.Context, sw toggleswitch.Switch, poseName string) (*p
 		lineToleranceMm:                 lineTol,
 		orientationToleranceDegs:        oriTol,
 		noSpillOrientationToleranceDegs: noSpillTol,
+		allowedObstacles:                allowedObstacles,
 	}, nil
 }
 
@@ -179,6 +189,9 @@ func (b *bartender) savePlan(ctx context.Context, req *armplanning.PlanRequest, 
 func (b *bartender) moveToResolvedPose(ctx context.Context, pd *poseData, label string, constraints *motionplan.Constraints, opts *arm.MoveOptions) (time.Duration, error) {
 	if opts == nil {
 		opts = moveOptionsFromCfg(pd.velDegsPerSec, pd.accDegsPerSec2)
+	}
+	if poseAllowed := b.poseAllowedCollisions(pd); len(poseAllowed) > 0 {
+		constraints = b.withAllowedCollisions(constraints, poseAllowed)
 	}
 	start := time.Now()
 	fs, fsInputs, err := b.currentInputs(ctx)
@@ -337,6 +350,24 @@ func (b *bartender) iceProtectorAllowed() []AllowedCollision {
 	}
 }
 
+// poseAllowedCollisions expands a pose's allowed_obstacles list into the three
+// gripper/claws/held-object vs. obstacle frame pairs, matching the shape of
+// the mixer / bottles / ice protector helpers.
+func (b *bartender) poseAllowedCollisions(pd *poseData) []AllowedCollision {
+	if pd == nil || len(pd.allowedObstacles) == 0 {
+		return nil
+	}
+	out := make([]AllowedCollision, 0, len(pd.allowedObstacles)*3)
+	for _, obstacle := range pd.allowedObstacles {
+		out = append(out,
+			AllowedCollision{Frame1: "claws-middle", Frame2: obstacle},
+			AllowedCollision{Frame1: b.cfg.GripperName + ":claws", Frame2: obstacle},
+			AllowedCollision{Frame1: heldObjectFrameName, Frame2: obstacle},
+		)
+	}
+	return out
+}
+
 // Straight-line through space; the empty-handed grab/release paths that risk
 // knocking the bottle laterally. For moves WITH a bottle in hand, use
 // linearCarryToPose so the no-spill orientation constraint is applied too.
@@ -405,6 +436,9 @@ func (b *bartender) carryHeldLevelToResolved(ctx context.Context, pd *poseData, 
 func (b *bartender) moveHeldToResolvedPose(ctx context.Context, pd *poseData, label string, constraints *motionplan.Constraints, opts *arm.MoveOptions) (time.Duration, error) {
 	if opts == nil {
 		opts = moveOptionsFromCfg(pd.velDegsPerSec, pd.accDegsPerSec2)
+	}
+	if poseAllowed := b.poseAllowedCollisions(pd); len(poseAllowed) > 0 {
+		constraints = b.withAllowedCollisions(constraints, poseAllowed)
 	}
 	if b.heldGeomFrame == nil {
 		return b.moveToResolvedPose(ctx, pd, label, constraints, opts)
