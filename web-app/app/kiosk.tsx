@@ -32,8 +32,8 @@ type WhiskeyEntry = {
 };
 
 const WHISKEY_SLUG = "whiskey-neat";
-const WHISKEY_SIZE_TASTE_OZ = 0.5;
-const WHISKEY_SIZE_POUR_OZ = 1.5;
+const WHISKEY_SIZE_TASTE_OZ = 1;
+const WHISKEY_SIZE_POUR_OZ = 2;
 
 const READY_CARD_MS = 60_000;
 const MINUTES_PER_DRINK = 3;
