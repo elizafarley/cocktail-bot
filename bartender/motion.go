@@ -314,20 +314,29 @@ func (b *bartender) pickupAllowedCollisions(key string) []AllowedCollision {
 	}
 }
 
+// armLinkFrames enumerates every arm sub-frame that counts as the arm itself
+// for collision-allowance purposes. link_base and link1 are deep inside the
+// base and unlikely to collide with anything, but we list them for completeness
+// so a single named-obstacle allow covers the whole arm.
+var armLinkSuffixes = []string{"link_base", "link1", "link2", "link3", "link4", "link5", "link6"}
+
 // gripperAllowedVsObstacle returns the frame pairs whose collision with the
 // named obstacle the planner should skip when the gripper is near it with
-// something in the claws. Includes the gripper body (case-gripper) alongside
-// the claws and the arm's wrist links (link5, link6) so brush-pasts of the
-// gripper housing or the arm wrist don't fail planning.
+// something in the claws. Covers the gripper (claws, case-gripper), the full
+// arm (link_base through link6), and the held object so brush-pasts anywhere
+// along the arm or gripper housing don't fail planning.
 func (b *bartender) gripperAllowedVsObstacle(obstacle string) []AllowedCollision {
-	return []AllowedCollision{
-		{Frame1: "claws-middle", Frame2: obstacle},
-		{Frame1: b.cfg.GripperName + ":claws", Frame2: obstacle},
-		{Frame1: b.cfg.GripperName + ":case-gripper", Frame2: obstacle},
-		{Frame1: b.cfg.ArmName + ":link5", Frame2: obstacle},
-		{Frame1: b.cfg.ArmName + ":link6", Frame2: obstacle},
-		{Frame1: heldObjectFrameName, Frame2: obstacle},
+	out := make([]AllowedCollision, 0, 3+len(armLinkSuffixes)+1)
+	out = append(out,
+		AllowedCollision{Frame1: "claws-middle", Frame2: obstacle},
+		AllowedCollision{Frame1: b.cfg.GripperName + ":claws", Frame2: obstacle},
+		AllowedCollision{Frame1: b.cfg.GripperName + ":case-gripper", Frame2: obstacle},
+	)
+	for _, suffix := range armLinkSuffixes {
+		out = append(out, AllowedCollision{Frame1: b.cfg.ArmName + ":" + suffix, Frame2: obstacle})
 	}
+	out = append(out, AllowedCollision{Frame1: heldObjectFrameName, Frame2: obstacle})
+	return out
 }
 
 func (b *bartender) mixerProtectorAllowed() []AllowedCollision {
