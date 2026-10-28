@@ -170,6 +170,14 @@ func (b *bartender) currentInputs(ctx context.Context) (*referenceframe.FrameSys
 // Every move the service makes routes through here — keep it the only call site
 // of armplanning.PlanMotion so instrumentation (saves, logs, timeouts) stays uniform.
 func (b *bartender) planMotion(ctx context.Context, req *armplanning.PlanRequest, label string) (motionplan.Plan, error) {
+	hasHeld := false
+	for _, name := range req.FrameSystem.FrameNames() {
+		if name == heldObjectFrameName {
+			hasHeld = true
+			break
+		}
+	}
+	b.logger.Infof("plan %s: held attached=%v, frames=%v", label, hasHeld, req.FrameSystem.FrameNames())
 	start := time.Now()
 	plan, _, err := armplanning.PlanMotion(ctx, b.logger, req)
 	duration := time.Since(start).Round(time.Millisecond)
