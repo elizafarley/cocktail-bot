@@ -317,12 +317,15 @@ func (b *bartender) pickupAllowedCollisions(key string) []AllowedCollision {
 // gripperAllowedVsObstacle returns the frame pairs whose collision with the
 // named obstacle the planner should skip when the gripper is near it with
 // something in the claws. Includes the gripper body (case-gripper) alongside
-// the claws so brush-pasts of the gripper housing don't fail planning.
+// the claws and the arm's wrist links (link5, link6) so brush-pasts of the
+// gripper housing or the arm wrist don't fail planning.
 func (b *bartender) gripperAllowedVsObstacle(obstacle string) []AllowedCollision {
 	return []AllowedCollision{
 		{Frame1: "claws-middle", Frame2: obstacle},
 		{Frame1: b.cfg.GripperName + ":claws", Frame2: obstacle},
 		{Frame1: b.cfg.GripperName + ":case-gripper", Frame2: obstacle},
+		{Frame1: b.cfg.ArmName + ":link5", Frame2: obstacle},
+		{Frame1: b.cfg.ArmName + ":link6", Frame2: obstacle},
 		{Frame1: heldObjectFrameName, Frame2: obstacle},
 	}
 }
