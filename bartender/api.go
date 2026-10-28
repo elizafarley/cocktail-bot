@@ -29,6 +29,12 @@ func (b *bartender) DoCommand(ctx context.Context, cmd map[string]any) (map[stri
 	if raw, ok := cmd["pickup_pour_return"]; ok {
 		return b.handlePickupPourReturn(ctx, raw)
 	}
+	if raw, ok := cmd["grab_bottle"]; ok {
+		return b.handleGrabBottle(ctx, raw)
+	}
+	if raw, ok := cmd["grab_shaker"]; ok {
+		return b.handleGrabShaker(ctx, raw)
+	}
 	if raw, ok := cmd["dispense_ice"]; ok {
 		return b.handleDispenseIce(ctx, raw)
 	}
@@ -98,7 +104,7 @@ func (b *bartender) DoCommand(ctx context.Context, cmd map[string]any) (map[stri
 	if raw, ok := cmd["make_cocktail"]; ok {
 		return b.handleMakeCocktail(ctx, raw)
 	}
-	return nil, fmt.Errorf("unknown command, supported: prepare_order, get_queue, get_status, cancel, execute_action, pickup_pour_return, dispense_ice, pour_into_glasses, find_glass, find_and_pour, find_and_pour_from_shaker, mix, pour_from_shaker, pour_into_shaker, strain_shaker, rotate_shakers, get_recipes, get_inventory, get_bottles, update_inventory_item, delete_inventory_item, update_recipes, update_slot_assignment, clear_slot_assignment, update_pourer_oz, update_category, update_whiskey_profile, clear_whiskey_profile, make_cocktail")
+	return nil, fmt.Errorf("unknown command, supported: prepare_order, get_queue, get_status, cancel, execute_action, pickup_pour_return, grab_bottle, grab_shaker, dispense_ice, pour_into_glasses, find_glass, find_and_pour, find_and_pour_from_shaker, mix, pour_from_shaker, pour_into_shaker, strain_shaker, rotate_shakers, get_recipes, get_inventory, get_bottles, update_inventory_item, delete_inventory_item, update_recipes, update_slot_assignment, clear_slot_assignment, update_pourer_oz, update_category, update_whiskey_profile, clear_whiskey_profile, make_cocktail")
 }
 
 func (b *bartender) handlePrepareOrder(raw any) (map[string]any, error) {
@@ -201,6 +207,83 @@ func (b *bartender) handlePickupPourReturn(ctx context.Context, raw any) (map[st
 		"pour_ms":     pourMs,
 		"duration_ms": time.Since(start).Milliseconds(),
 	}, nil
+}
+
+func (b *bartender) handleGrabBottle(ctx context.Context, raw any) (map[string]any, error) {
+	bottle, err := parseGrabBottle(raw)
+	if err != nil {
+		return nil, err
+	}
+	ctx = ctxWithOrderID(ctx, "manual-"+time.Now().UTC().Format("20060102_150405"))
+	ctx, done := b.withCancel(ctx)
+	defer done()
+	bottleSw, err := b.findSwitch(bottle)
+	if err != nil {
+		return nil, err
+	}
+	start := time.Now()
+	if err := b.pickupBottle(ctx, bottleSw); err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"bottle":      bottle,
+		"duration_ms": time.Since(start).Milliseconds(),
+	}, nil
+}
+
+func parseGrabBottle(raw any) (string, error) {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("grab_bottle: expected object with 'bottle', got %T", raw)
+	}
+	bottle, _ := m["bottle"].(string)
+	if bottle == "" {
+		return "", fmt.Errorf("grab_bottle: 'bottle' is required")
+	}
+	return bottle, nil
+}
+
+func (b *bartender) handleGrabShaker(ctx context.Context, raw any) (map[string]any, error) {
+	switchName, source, err := parseGrabShaker(raw)
+	if err != nil {
+		return nil, err
+	}
+	ctx = ctxWithOrderID(ctx, "manual-"+time.Now().UTC().Format("20060102_150405"))
+	ctx, done := b.withCancel(ctx)
+	defer done()
+	sw, err := b.findSwitch(switchName)
+	if err != nil {
+		return nil, err
+	}
+	start := time.Now()
+	if err := b.pickupShaker(ctx, sw, source); err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"source":      source,
+		"switch":      switchName,
+		"duration_ms": time.Since(start).Milliseconds(),
+	}, nil
+}
+
+func parseGrabShaker(raw any) (string, string, error) {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return "", "", fmt.Errorf("grab_shaker: expected object with 'switch' and 'source', got %T", raw)
+	}
+	switchName, _ := m["switch"].(string)
+	if switchName == "" {
+		return "", "", fmt.Errorf("grab_shaker: 'switch' is required (name of the pose switcher holding the shaker poses)")
+	}
+	source, _ := m["source"].(string)
+	switch source {
+	case "shaker-home", "shaker-a", "shaker-b":
+		return switchName, source, nil
+	case "":
+		return "", "", fmt.Errorf("grab_shaker: 'source' is required (shaker-home, shaker-a, or shaker-b)")
+	default:
+		return "", "", fmt.Errorf("grab_shaker: 'source' must be shaker-home, shaker-a, or shaker-b, got %q", source)
+	}
 }
 
 func (b *bartender) handlePourIntoGlasses(ctx context.Context, raw any) (map[string]any, error) {
