@@ -66,10 +66,10 @@ func (b *bartender) strainShaker(ctx context.Context, req strainShakerRequest) e
 	if err := b.gripper.Open(ctx, nil); err != nil {
 		return fmt.Errorf("release A at shaker-b-place: %w", err)
 	}
-	b.detachHeld()
-	if _, err := b.linearMoveToPose(ctx, flowSw, poseShakerBDescend, shakerBAllow...); err != nil {
+	if _, err := b.linearCarryToPose(ctx, flowSw, poseShakerBDescend, shakerBAllow...); err != nil {
 		return fmt.Errorf("linear-descend further to shaker-b-descend: %w", err)
 	}
+	b.detachHeld()
 	if _, err := b.linearMoveToPose(ctx, flowSw, poseShakerBHover, shakerBAllow...); err != nil {
 		return fmt.Errorf("linear-retreat to shaker-b-hover: %w", err)
 	}

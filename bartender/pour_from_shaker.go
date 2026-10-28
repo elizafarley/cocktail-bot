@@ -62,10 +62,10 @@ func (b *bartender) pourFromShakerAt(ctx context.Context, sw toggleswitch.Switch
 	if err := b.gripper.Open(ctx, nil); err != nil {
 		return fmt.Errorf("release shaker grip at lift: %w", err)
 	}
-	b.detachHeld()
-	if _, err := b.linearMoveToPose(ctx, sw, poseShakerHomeApproach, shakerAllow...); err != nil {
+	if _, err := b.linearCarryToPose(ctx, sw, poseShakerHomeApproach, shakerAllow...); err != nil {
 		return fmt.Errorf("linear-descend further to shaker grab: %w", err)
 	}
+	b.detachHeld()
 	if _, err := b.linearMoveToPose(ctx, sw, poseShakerHomeHover, shakerAllow...); err != nil {
 		return fmt.Errorf("linear-retreat from shaker: %w", err)
 	}
