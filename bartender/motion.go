@@ -149,8 +149,13 @@ func (b *bartender) currentInputs(ctx context.Context) (*referenceframe.FrameSys
 		return nil, nil, fmt.Errorf("build frame system: %w", err)
 	}
 	if b.heldGeomFrame != nil {
-		if err := fs.AddFrame(b.heldGeomFrame, fs.Frame(b.cfg.GripperName)); err != nil {
-			return nil, nil, fmt.Errorf("attach held geometry frame: %w", err)
+		parent := fs.Frame(gripPointFrameName)
+		if parent == nil {
+			parent = fs.Frame(b.cfg.GripperName)
+			b.logger.Warnf("no %q frame in config; attaching held object to %q origin instead. The virtual capsule will sit at the gripper mount, not where the claws close, so collision checks will be off by the gripper tool length. Add a grip-point component parented to the gripper to fix.", gripPointFrameName, b.cfg.GripperName)
+		}
+		if err := fs.AddFrame(b.heldGeomFrame, parent); err != nil {
+			return nil, nil, fmt.Errorf("attach held geometry frame to %q: %w", parent.Name(), err)
 		}
 	}
 	armInputs, err := b.arm.CurrentInputs(ctx)
