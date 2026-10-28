@@ -100,9 +100,9 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
       const slug = WHISKEY_SLUG;
       const steps: RecipeStep[] = [];
       if (serve === "rocks") {
-        steps.push({ kind: "ice", type: "crushed", target: "shaker" });
+        steps.push({ kind: "ice", type: "crushed" });
       }
-      steps.push({ kind: "pour", target: "shaker", ingredient: entry.ingredient, oz: size });
+      steps.push({ kind: "pour", ingredient: entry.ingredient, oz: size });
       setOrder({ kind: "running", label, slug });
       try {
         await makeInlineOrder(conn, { name: label, steps });
