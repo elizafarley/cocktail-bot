@@ -193,6 +193,9 @@ func (b *bartender) moveToResolvedPose(ctx context.Context, pd *poseData, label 
 	if poseAllowed := b.poseAllowedCollisions(pd); len(poseAllowed) > 0 {
 		constraints = b.withAllowedCollisions(constraints, poseAllowed)
 	}
+	if heldAllowed := b.armAndGripperVsHeldAllowed(); len(heldAllowed) > 0 {
+		constraints = b.withAllowedCollisions(constraints, heldAllowed)
+	}
 	start := time.Now()
 	fs, fsInputs, err := b.currentInputs(ctx)
 	if err != nil {
@@ -373,6 +376,27 @@ func (b *bartender) poseAllowedCollisions(pd *poseData) []AllowedCollision {
 	return out
 }
 
+// armAndGripperVsHeldAllowed returns the frame pairs the planner should skip
+// when something is in the gripper. The held-object capsule is a conservative
+// volume attached to the gripper and may spuriously overlap the arm or gripper
+// bodies in some joint configurations, even though the real object cannot (the
+// arm is literally holding it). Returns nil when nothing is held.
+func (b *bartender) armAndGripperVsHeldAllowed() []AllowedCollision {
+	if b.heldGeomFrame == nil {
+		return nil
+	}
+	out := make([]AllowedCollision, 0, 3+len(armLinkSuffixes))
+	out = append(out,
+		AllowedCollision{Frame1: "claws-middle", Frame2: heldObjectFrameName},
+		AllowedCollision{Frame1: b.cfg.GripperName + ":claws", Frame2: heldObjectFrameName},
+		AllowedCollision{Frame1: b.cfg.GripperName + ":case-gripper", Frame2: heldObjectFrameName},
+	)
+	for _, suffix := range armLinkSuffixes {
+		out = append(out, AllowedCollision{Frame1: b.cfg.ArmName + ":" + suffix, Frame2: heldObjectFrameName})
+	}
+	return out
+}
+
 // Straight-line through space; the empty-handed grab/release paths that risk
 // knocking the bottle laterally. For moves WITH a bottle in hand, use
 // linearCarryToPose so the no-spill orientation constraint is applied too.
@@ -444,6 +468,9 @@ func (b *bartender) moveHeldToResolvedPose(ctx context.Context, pd *poseData, la
 	}
 	if poseAllowed := b.poseAllowedCollisions(pd); len(poseAllowed) > 0 {
 		constraints = b.withAllowedCollisions(constraints, poseAllowed)
+	}
+	if heldAllowed := b.armAndGripperVsHeldAllowed(); len(heldAllowed) > 0 {
+		constraints = b.withAllowedCollisions(constraints, heldAllowed)
 	}
 	if b.heldGeomFrame == nil {
 		return b.moveToResolvedPose(ctx, pd, label, constraints, opts)
