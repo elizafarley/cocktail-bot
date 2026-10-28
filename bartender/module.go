@@ -142,9 +142,11 @@ func newBartender(ctx context.Context, deps resource.Dependencies, conf resource
 	if cfg.GlassFinderName != "" {
 		gf, err := vision.FromProvider(deps, cfg.GlassFinderName)
 		if err != nil {
-			return nil, fmt.Errorf("glass finder %q: %w", cfg.GlassFinderName, err)
+			logger.Warnf("optional glass finder %q not available: %v; bartender will come up without find_glass; a later reconfigure once the dep is ready will attach it",
+				cfg.GlassFinderName, err)
+		} else {
+			b.glassFinder = gf
 		}
-		b.glassFinder = gf
 	}
 
 	if dir := cfg.dataDir(); dir != "" {
