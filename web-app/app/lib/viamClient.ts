@@ -51,6 +51,22 @@ const DEV_INVENTORY: Inventory = {
   },
 };
 
+const DEV_POUR_MENUS: import("./pour_menus").PourMenu[] = [
+  {
+    id: "whiskey-bar",
+    name: "Whiskey bar",
+    category: "Whiskey",
+    on_menu: true,
+    sizes: [{ label: "Taste", oz: 1 }, { label: "Pour", oz: 2 }],
+    default_size: "Taste",
+    serves: [
+      { label: "Neat", glass: "rocks" },
+      { label: "On the rocks", glass: "rocks", with_ice: true },
+    ],
+    traits: ["Peat", "Smoke", "Smoothness", "Sweetness", "Fruitiness", "Heat", "Body"],
+  },
+];
+
 // Simulated verb duration so dev-mode progress bars feel alive.
 const DEV_VERB_DELAY_MS = 1500;
 
@@ -292,6 +308,29 @@ export async function updateRecipes(
   }
   return doCommand(conn, BARTENDER_SERVICE_NAME, {
     update_recipes: { recipes: recipes as unknown as import("@bufbuild/protobuf").JsonValue },
+  });
+}
+
+export async function getPourMenus(conn: ViamConnection): Promise<import("./pour_menus").PourMenu[]> {
+  if (conn.isDev) return DEV_POUR_MENUS;
+  const resp = await doCommand<{ pour_menus: import("./pour_menus").PourMenu[] }>(
+    conn,
+    BARTENDER_SERVICE_NAME,
+    { get_pour_menus: true },
+  );
+  return resp.pour_menus ?? [];
+}
+
+export async function updatePourMenus(
+  conn: ViamConnection,
+  menus: import("./pour_menus").PourMenu[],
+): Promise<{ count: number }> {
+  if (conn.isDev) {
+    DEV_POUR_MENUS.splice(0, DEV_POUR_MENUS.length, ...menus);
+    return { count: menus.length };
+  }
+  return doCommand(conn, BARTENDER_SERVICE_NAME, {
+    update_pour_menus: { pour_menus: menus as unknown as import("@bufbuild/protobuf").JsonValue },
   });
 }
 

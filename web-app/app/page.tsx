@@ -7,6 +7,7 @@ import { Kiosk } from "./kiosk";
 import { Admin } from "./admin";
 import { InventoryPage } from "./inventory";
 import { RecipesPage } from "./recipes";
+import { PoursPage } from "./pours";
 import { Dashboard } from "./dashboard";
 
 function PageInner() {
@@ -45,6 +46,9 @@ function PageInner() {
   }
   if (view === "recipes") {
     return <RecipesPage conn={conn} />;
+  }
+  if (view === "pours") {
+    return <PoursPage conn={conn} />;
   }
   return <Kiosk conn={conn} connected={connected} />;
 }

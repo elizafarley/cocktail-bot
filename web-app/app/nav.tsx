@@ -3,12 +3,13 @@
 import { useSearchParams } from "next/navigation";
 import styles from "./nav.module.css";
 
-type View = "kiosk" | "inventory" | "recipes" | "admin";
+type View = "kiosk" | "inventory" | "recipes" | "pours" | "admin";
 
 const TABS: { view: View; label: string }[] = [
   { view: "kiosk", label: "Kiosk" },
   { view: "inventory", label: "Inventory" },
   { view: "recipes", label: "Recipes" },
+  { view: "pours", label: "Pours" },
 ];
 
 export function Nav({ current }: { current: View }) {
