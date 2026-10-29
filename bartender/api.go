@@ -133,12 +133,8 @@ func (b *bartender) handleGetQueue() (map[string]any, error) {
 
 func (b *bartender) handleCancel() (map[string]any, error) {
 	cancelled := b.cancelRunning()
-	cleared := b.queue.Clear()
 	b.detachHeld()
-	return map[string]any{
-		"cancelled":     cancelled,
-		"queue_cleared": cleared,
-	}, nil
+	return map[string]any{"cancelled": cancelled}, nil
 }
 
 func (b *bartender) handleGetStatus() (map[string]any, error) {
