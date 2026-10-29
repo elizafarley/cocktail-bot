@@ -81,17 +81,21 @@ type orderAlert struct {
 func alertText(a orderAlert) string {
 	drink := escapeSlackMrkdwn(a.drink)
 	dur := a.duration.Round(time.Second)
+	suffix := ""
+	if a.orderID != "" {
+		suffix = fmt.Sprintf(" [order %s]", escapeSlackMrkdwn(a.orderID))
+	}
 	if a.err == nil {
-		return fmt.Sprintf(":white_check_mark: %s ready in %s", drink, dur)
+		return fmt.Sprintf(":white_check_mark: %s ready in %s%s", drink, dur, suffix)
 	}
 	if a.operatorCancelled {
-		return fmt.Sprintf(":warning: %s cancelled by operator at %q after %s", drink, a.phase, dur)
+		return fmt.Sprintf(":warning: %s cancelled by operator at %q after %s%s", drink, a.phase, dur, suffix)
 	}
 	phase := a.phase
 	if phase == "" {
 		phase = "unknown step"
 	}
-	return fmt.Sprintf(":x: %s failed at %q after %s — %s", drink, phase, dur, escapeSlackMrkdwn(a.err.Error()))
+	return fmt.Sprintf(":x: %s failed at %q after %s — %s%s", drink, phase, dur, escapeSlackMrkdwn(a.err.Error()), suffix)
 }
 
 func alertBlocks(a orderAlert) []any {
@@ -99,17 +103,19 @@ func alertBlocks(a orderAlert) []any {
 	dur := a.duration.Round(time.Second).String()
 
 	if a.err == nil {
+		fields := []any{slackField("*Drink:*", drink)}
+		if a.orderID != "" {
+			fields = append(fields, slackField("*Order:*", escapeSlackMrkdwn(a.orderID)))
+		}
+		fields = append(fields, slackField("*Duration:*", dur))
 		return []any{
 			map[string]any{
 				"type": "header",
 				"text": map[string]any{"type": "plain_text", "text": ":white_check_mark: Order ready", "emoji": true},
 			},
 			map[string]any{
-				"type": "section",
-				"fields": []any{
-					slackField("*Drink:*", drink),
-					slackField("*Duration:*", dur),
-				},
+				"type":   "section",
+				"fields": fields,
 			},
 		}
 	}
@@ -126,18 +132,22 @@ func alertBlocks(a orderAlert) []any {
 		phase = "unknown step"
 	}
 
+	fields := []any{slackField("*Drink:*", drink)}
+	if a.orderID != "" {
+		fields = append(fields, slackField("*Order:*", escapeSlackMrkdwn(a.orderID)))
+	}
+	fields = append(fields,
+		slackField(stepLabel, phase),
+		slackField("*Duration:*", dur),
+	)
 	blocks := []any{
 		map[string]any{
 			"type": "header",
 			"text": map[string]any{"type": "plain_text", "text": header, "emoji": true},
 		},
 		map[string]any{
-			"type": "section",
-			"fields": []any{
-				slackField("*Drink:*", drink),
-				slackField(stepLabel, phase),
-				slackField("*Duration:*", dur),
-			},
+			"type":   "section",
+			"fields": fields,
 		},
 	}
 	if !a.operatorCancelled && a.err != nil {
@@ -149,20 +159,13 @@ func alertBlocks(a orderAlert) []any {
 			},
 		})
 	}
-	footer := ""
-	if a.orderID != "" {
-		footer = fmt.Sprintf("Order `%s`", a.orderID)
-	}
 	if a.machineID != "" {
-		if footer != "" {
-			footer += " · "
-		}
-		footer += fmt.Sprintf("<https://app.viam.com/machine/%s/logs|machine logs>", a.machineID)
-	}
-	if footer != "" {
 		blocks = append(blocks, map[string]any{
-			"type":     "context",
-			"elements": []any{map[string]any{"type": "mrkdwn", "text": footer}},
+			"type": "context",
+			"elements": []any{map[string]any{
+				"type": "mrkdwn",
+				"text": fmt.Sprintf("<https://app.viam.com/machine/%s/logs|machine logs>", a.machineID),
+			}},
 		})
 	}
 	return blocks
