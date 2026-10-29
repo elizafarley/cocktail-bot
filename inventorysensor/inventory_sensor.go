@@ -92,9 +92,11 @@ func (s *inventorySensor) Status(context.Context) (map[string]any, error) {
 	return map[string]any{}, nil
 }
 
-// Returns data.ErrNoCaptureToStore unless the snapshot changed or the heartbeat
-// elapsed, so a high capture frequency doesn't fill the table with duplicates.
-func (s *inventorySensor) Readings(ctx context.Context, _ map[string]any) (map[string]any, error) {
+// For Data Management calls, returns data.ErrNoCaptureToStore unless the
+// snapshot changed or the heartbeat elapsed, so a high capture frequency
+// doesn't fill the table with duplicates. Other callers always get the
+// snapshot and don't affect dedup state.
+func (s *inventorySensor) Readings(ctx context.Context, extra map[string]any) (map[string]any, error) {
 	resp, err := s.bartender.DoCommand(ctx, map[string]any{"get_inventory": true})
 	if err != nil {
 		return nil, fmt.Errorf("get_inventory: %w", err)
@@ -112,6 +114,9 @@ func (s *inventorySensor) Readings(ctx context.Context, _ map[string]any) (map[s
 	var snapshot map[string]any
 	if err := json.Unmarshal(encoded, &snapshot); err != nil {
 		return nil, fmt.Errorf("unmarshal inventory: %w", err)
+	}
+	if fromDM, _ := extra[data.FromDMString].(bool); !fromDM {
+		return snapshot, nil
 	}
 	hash := sha256.Sum256(encoded)
 

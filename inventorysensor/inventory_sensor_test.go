@@ -60,7 +60,7 @@ func setup(t *testing.T) (*inventorySensor, *fakeBartender, *time.Time) {
 
 func TestReadings_FirstCallEmitsSnapshot(t *testing.T) {
 	s, _, _ := setup(t)
-	readings, err := s.Readings(context.Background(), nil)
+	readings, err := s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldBeNil)
 	gin := readings["ingredients"].(map[string]any)["gin"].(map[string]any)
 	test.That(t, gin["slot"], test.ShouldEqual, "slot-1")
@@ -70,19 +70,19 @@ func TestReadings_FirstCallEmitsSnapshot(t *testing.T) {
 
 func TestReadings_SkipsUnchangedSnapshot(t *testing.T) {
 	s, _, clock := setup(t)
-	_, err := s.Readings(context.Background(), nil)
+	_, err := s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldBeNil)
 	*clock = clock.Add(time.Minute)
-	_, err = s.Readings(context.Background(), nil)
+	_, err = s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldEqual, data.ErrNoCaptureToStore)
 }
 
 func TestReadings_EmitsOnChange(t *testing.T) {
 	s, b, _ := setup(t)
-	_, err := s.Readings(context.Background(), nil)
+	_, err := s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldBeNil)
 	b.inventory["slots"] = []any{map[string]any{"id": "slot-1", "ingredient": "rum"}}
-	readings, err := s.Readings(context.Background(), nil)
+	readings, err := s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldBeNil)
 	slot := readings["slots"].([]any)[0].(map[string]any)
 	test.That(t, slot["ingredient"], test.ShouldEqual, "rum")
@@ -90,30 +90,30 @@ func TestReadings_EmitsOnChange(t *testing.T) {
 
 func TestReadings_EmitsOnHeartbeat(t *testing.T) {
 	s, _, clock := setup(t)
-	_, err := s.Readings(context.Background(), nil)
+	_, err := s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldBeNil)
 	*clock = clock.Add(time.Hour)
-	_, err = s.Readings(context.Background(), nil)
+	_, err = s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldBeNil)
 }
 
 func TestReadings_BartenderErrorPassesThrough(t *testing.T) {
 	s, b, _ := setup(t)
 	b.err = errors.New("data_dir not configured")
-	_, err := s.Readings(context.Background(), nil)
+	_, err := s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldNotBeNil)
 	test.That(t, err.Error(), test.ShouldContainSubstring, "data_dir not configured")
 }
 
 func TestReadings_ErrorDoesNotResetDedup(t *testing.T) {
 	s, b, _ := setup(t)
-	_, err := s.Readings(context.Background(), nil)
+	_, err := s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldBeNil)
 	b.err = errors.New("boom")
-	_, err = s.Readings(context.Background(), nil)
+	_, err = s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldNotBeNil)
 	b.err = nil
-	_, err = s.Readings(context.Background(), nil)
+	_, err = s.Readings(context.Background(), data.FromDMExtraMap)
 	test.That(t, err, test.ShouldEqual, data.ErrNoCaptureToStore)
 }
 
@@ -132,4 +132,21 @@ func TestValidate(t *testing.T) {
 func TestHeartbeatDefault(t *testing.T) {
 	test.That(t, (&Config{}).heartbeat(), test.ShouldEqual, time.Hour)
 	test.That(t, (&Config{HeartbeatSec: 60}).heartbeat(), test.ShouldEqual, time.Minute)
+}
+
+func TestReadings_NonDMCallerAlwaysGetsSnapshotWithoutConsumingChange(t *testing.T) {
+	s, b, _ := setup(t)
+	_, err := s.Readings(context.Background(), data.FromDMExtraMap)
+	test.That(t, err, test.ShouldBeNil)
+
+	readings, err := s.Readings(context.Background(), nil)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, readings["slots"], test.ShouldHaveLength, 1)
+
+	b.inventory["slots"] = []any{map[string]any{"id": "slot-1", "ingredient": "rum"}}
+	_, err = s.Readings(context.Background(), nil)
+	test.That(t, err, test.ShouldBeNil)
+
+	_, err = s.Readings(context.Background(), data.FromDMExtraMap)
+	test.That(t, err, test.ShouldBeNil)
 }
