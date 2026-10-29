@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { ViamConnection } from "./lib/viamClient";
 import {
   getInventory,
+  getPourMenus,
   getRecipes,
   getMachineName,
   getStatus,
@@ -16,6 +17,7 @@ import type { Recipe, RecipeStep } from "./lib/recipes";
 import { recipePours } from "./lib/recipes";
 import type { Inventory, WhiskeyProfile } from "./lib/inventory";
 import { isAvailable, WHISKEY_TRAITS } from "./lib/inventory";
+import type { PourMenu, PourServe, PourSize } from "./lib/pour_menus";
 import { titleCase } from "./lib/display";
 import { Nav } from "./nav";
 import styles from "./kiosk.module.css";
@@ -26,17 +28,31 @@ type OrderState =
   | { kind: "done"; label: string; slug?: string; at: number }
   | { kind: "error"; label: string; slug?: string; message: string };
 
-type WhiskeyEntry = {
+type PourEntry = {
+  menu: PourMenu;
   ingredient: string;
-  profile: WhiskeyProfile;
+  profile: WhiskeyProfile | null;
+  available: boolean;
 };
 
 const WHISKEY_SLUG = "whiskey-neat";
-const WHISKEY_SIZE_TASTE_OZ = 1;
-const WHISKEY_SIZE_POUR_OZ = 2;
 
 const READY_CARD_MS = 60_000;
 const MINUTES_PER_DRINK = 3;
+
+function slugForMenu(menu: PourMenu): string {
+  if (menu.illustration) return menu.illustration;
+  if (menu.category.toLowerCase() === "whiskey") return WHISKEY_SLUG;
+  return "";
+}
+
+function defaultSize(menu: PourMenu): PourSize | undefined {
+  if (menu.default_size) {
+    const match = menu.sizes.find((s) => s.label === menu.default_size);
+    if (match) return match;
+  }
+  return menu.sizes[0];
+}
 
 export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: boolean }) {
   const params = useSearchParams();
@@ -44,22 +60,24 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   const [machineName, setMachineName] = useState<string>("");
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [inventory, setInventory] = useState<Inventory | null>(null);
+  const [menus, setMenus] = useState<PourMenu[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderState>({ kind: "idle" });
   const [confirming, setConfirming] = useState<{ recipe: Recipe; orderable: boolean } | null>(null);
-  const [whiskeyConfirming, setWhiskeyConfirming] = useState<WhiskeyEntry | null>(null);
-  const [whiskeyPreview, setWhiskeyPreview] = useState<WhiskeyEntry | null>(null);
+  const [pourConfirming, setPourConfirming] = useState<PourEntry | null>(null);
+  const [pourPreview, setPourPreview] = useState<PourEntry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     getMachineName(conn)
       .then((n) => !cancelled && setMachineName(n))
       .catch(() => {});
-    Promise.all([getRecipes(conn), getInventory(conn)])
-      .then(([r, i]) => {
+    Promise.all([getRecipes(conn), getInventory(conn), getPourMenus(conn)])
+      .then(([r, i, m]) => {
         if (cancelled) return;
         setRecipes(r);
         setInventory(i);
+        setMenus(m);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -90,19 +108,15 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
     [conn],
   );
 
-  const startWhiskeyOrder = useCallback(
-    async (
-      entry: WhiskeyEntry,
-      size: number,
-      serve: "neat" | "rocks",
-    ) => {
-      const label = `${titleCase(entry.ingredient)} · ${size === WHISKEY_SIZE_TASTE_OZ ? "Taste" : "Pour"} · ${serve === "neat" ? "Neat" : "On the rocks"}`;
-      const slug = WHISKEY_SLUG;
+  const startPourOrder = useCallback(
+    async (entry: PourEntry, size: PourSize, serve: PourServe) => {
+      const label = `${titleCase(entry.ingredient)} · ${size.label} · ${serve.label}`;
+      const slug = slugForMenu(entry.menu);
       const steps: RecipeStep[] = [];
-      if (serve === "rocks") {
+      if (serve.with_ice) {
         steps.push({ kind: "ice", type: "crushed" });
       }
-      steps.push({ kind: "pour", ingredient: entry.ingredient, oz: size });
+      steps.push({ kind: "pour", ingredient: entry.ingredient, oz: size.oz });
       setOrder({ kind: "running", label, slug });
       try {
         await makeInlineOrder(conn, { name: label, steps });
@@ -130,9 +144,14 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
   }, [order]);
 
   const visible = recipes ? recipes.filter((r) => r.on_menu !== false) : [];
-  const allWhiskeys: { entry: WhiskeyEntry; available: boolean }[] = inventory
-    ? Object.entries(inventory.ingredients)
-        .filter(([, stock]) => stock.category === "Whiskey" && stock.whiskey_profile)
+
+  const allPours: PourEntry[] = useMemo(() => {
+    if (!menus || !inventory) return [];
+    const out: PourEntry[] = [];
+    for (const menu of menus) {
+      if (!menu.on_menu) continue;
+      const matches = Object.entries(inventory.ingredients)
+        .filter(([, stock]) => stock.category === menu.category)
         .sort(([aName, aStock], [bName, bStock]) => {
           const as = aStock.slot ?? "";
           const bs = bStock.slot ?? "";
@@ -140,39 +159,60 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
           if (as && !bs) return -1;
           if (!as && bs) return 1;
           return aName.localeCompare(bName);
-        })
-        .map(([ingredient, stock]) => ({
-          entry: { ingredient, profile: stock.whiskey_profile! },
+        });
+      for (const [ingredient, stock] of matches) {
+        out.push({
+          menu,
+          ingredient,
+          profile: stock.whiskey_profile ?? null,
           available: Boolean(stock.slot && stock.in_stock),
-        }))
-    : [];
-  const availableWhiskeys = allWhiskeys.filter((w) => w.available).map((w) => w.entry);
-  const pendingWhiskeys = allWhiskeys.filter((w) => !w.available).map((w) => w.entry);
+        });
+      }
+    }
+    return out;
+  }, [menus, inventory]);
+
+  const pourSections = useMemo(() => {
+    const groups = new Map<string, { menu: PourMenu; entries: PourEntry[] }>();
+    for (const p of allPours) {
+      if (!p.available) continue;
+      const g = groups.get(p.menu.id) ?? { menu: p.menu, entries: [] };
+      g.entries.push(p);
+      groups.set(p.menu.id, g);
+    }
+    return [...groups.values()].sort(
+      (a, b) => (a.menu.sort_order ?? 0) - (b.menu.sort_order ?? 0),
+    );
+  }, [allPours]);
+
+  const pendingPours = allPours.filter((p) => !p.available);
 
   const menu = loadError ? (
     <p className={styles.sub}>Could not load menu: {loadError}</p>
-  ) : !recipes || !inventory ? (
+  ) : !recipes || !inventory || !menus ? (
     <p className={styles.loading}>Loading menu…</p>
-  ) : recipes.length === 0 && allWhiskeys.length === 0 ? (
+  ) : recipes.length === 0 && allPours.length === 0 ? (
     <p className={styles.loading}>No recipes configured.</p>
-  ) : visible.length === 0 && allWhiskeys.length === 0 ? (
+  ) : visible.length === 0 && pourSections.length === 0 ? (
     <p className={styles.loading}>No drinks on the menu right now.</p>
   ) : (
     <>
-      {availableWhiskeys.length > 0 && (
-        <WhiskeyBarSection
-          whiskeys={availableWhiskeys}
+      {pourSections.map(({ menu: pm, entries }) => (
+        <PourMenuSection
+          key={pm.id}
+          menu={pm}
+          entries={entries}
           disabled={order.kind === "running"}
-          onPick={(entry) => setWhiskeyConfirming(entry)}
+          onPick={(entry) => setPourConfirming(entry)}
         />
-      )}
+      ))}
       <DrinkMenu
         recipes={visible}
         inventory={inventory}
-        pendingWhiskeys={pendingWhiskeys}
+        pendingPours={pendingPours}
         disabled={order.kind === "running"}
         onPick={(recipe, orderable) => setConfirming({ recipe, orderable })}
-        onPickPendingWhiskey={(entry) => setWhiskeyPreview(entry)}
+        onPickPendingPour={(entry) => setPourPreview(entry)}
       />
     </>
   );
@@ -223,22 +263,22 @@ export function Kiosk({ conn, connected }: { conn: ViamConnection; connected: bo
           />
         )}
 
-        {whiskeyConfirming && (
-          <WhiskeySheet
-            entry={whiskeyConfirming}
-            onCancel={() => setWhiskeyConfirming(null)}
+        {pourConfirming && (
+          <PourSheet
+            entry={pourConfirming}
+            onCancel={() => setPourConfirming(null)}
             onOrder={(size, serve) => {
-              const picked = whiskeyConfirming;
-              setWhiskeyConfirming(null);
-              startWhiskeyOrder(picked, size, serve);
+              const picked = pourConfirming;
+              setPourConfirming(null);
+              startPourOrder(picked, size, serve);
             }}
           />
         )}
 
-        {whiskeyPreview && (
-          <WhiskeyPreviewSheet
-            entry={whiskeyPreview}
-            onClose={() => setWhiskeyPreview(null)}
+        {pourPreview && (
+          <PourPreviewSheet
+            entry={pourPreview}
+            onClose={() => setPourPreview(null)}
           />
         )}
 
@@ -344,17 +384,17 @@ function firstMissingIngredient(recipe: Recipe, inventory: Inventory): string | 
 function DrinkMenu({
   recipes,
   inventory,
-  pendingWhiskeys,
+  pendingPours,
   disabled,
   onPick,
-  onPickPendingWhiskey,
+  onPickPendingPour,
 }: {
   recipes: Recipe[];
   inventory: Inventory;
-  pendingWhiskeys: WhiskeyEntry[];
+  pendingPours: PourEntry[];
   disabled: boolean;
   onPick: (recipe: Recipe, orderable: boolean) => void;
-  onPickPendingWhiskey: (entry: WhiskeyEntry) => void;
+  onPickPendingPour: (entry: PourEntry) => void;
 }) {
   const available: Recipe[] = [];
   const unavailable: Recipe[] = [];
@@ -363,7 +403,7 @@ function DrinkMenu({
   }
   const sections = groupBySection(available);
   unavailable.sort(compareRecipes);
-  const hasBackSoon = unavailable.length > 0 || pendingWhiskeys.length > 0;
+  const hasBackSoon = unavailable.length > 0 || pendingPours.length > 0;
 
   return (
     <>
@@ -403,18 +443,18 @@ function DrinkMenu({
                 </button>
               );
             })}
-            {pendingWhiskeys.map((entry) => (
+            {pendingPours.map((entry) => (
               <button
-                key={entry.ingredient}
+                key={`${entry.menu.id}-${entry.ingredient}`}
                 type="button"
                 className={styles.backSoonPill}
-                onClick={() => onPickPendingWhiskey(entry)}
+                onClick={() => onPickPendingPour(entry)}
                 disabled={disabled}
               >
-                <DrinkArt slug={WHISKEY_SLUG} name={titleCase(entry.ingredient)} compact />
+                <DrinkArt slug={slugForMenu(entry.menu)} name={titleCase(entry.ingredient)} compact />
                 <span className={styles.backSoonBody}>
                   <span className={styles.backSoonName}>{titleCase(entry.ingredient)}</span>
-                  <span className={styles.backSoonReason}>Whiskey bar · coming soon</span>
+                  <span className={styles.backSoonReason}>{entry.menu.name} · coming soon</span>
                 </span>
               </button>
             ))}
@@ -578,23 +618,25 @@ function OrderError({
   );
 }
 
-function WhiskeyBarSection({
-  whiskeys,
+function PourMenuSection({
+  menu,
+  entries,
   disabled,
   onPick,
 }: {
-  whiskeys: WhiskeyEntry[];
+  menu: PourMenu;
+  entries: PourEntry[];
   disabled: boolean;
-  onPick: (entry: WhiskeyEntry) => void;
+  onPick: (entry: PourEntry) => void;
 }) {
   return (
-    <section className={styles.menuSection} aria-label="Whiskey bar">
-      <h2>Whiskey bar</h2>
-      <p className={styles.whiskeyIntro}>Japanese whisky tasting. Start light, finish smoky.</p>
+    <section className={styles.menuSection} aria-label={menu.name}>
+      <h2>{menu.name}</h2>
+      {menu.intro && <p className={styles.whiskeyIntro}>{menu.intro}</p>}
       <ul className={styles.menu}>
-        {whiskeys.map((entry) => (
+        {entries.map((entry) => (
           <li key={entry.ingredient}>
-            <WhiskeyCard entry={entry} disabled={disabled} onPick={onPick} />
+            <BottleCard entry={entry} disabled={disabled} onPick={onPick} />
           </li>
         ))}
       </ul>
@@ -610,18 +652,19 @@ function rarityFromUs(us?: string): string | null {
   return null;
 }
 
-function WhiskeyCard({
+function BottleCard({
   entry,
   disabled,
   onPick,
 }: {
-  entry: WhiskeyEntry;
+  entry: PourEntry;
   disabled: boolean;
-  onPick: (entry: WhiskeyEntry) => void;
+  onPick: (entry: PourEntry) => void;
 }) {
   const name = titleCase(entry.ingredient);
-  const line = entry.profile.notes || entry.profile.style || "";
-  const rarity = rarityFromUs(entry.profile.us);
+  const profile = entry.profile;
+  const line = profile?.notes || profile?.style || "";
+  const rarity = rarityFromUs(profile?.us);
   return (
     <button
       type="button"
@@ -629,13 +672,11 @@ function WhiskeyCard({
       onClick={() => onPick(entry)}
       disabled={disabled}
     >
-      <DrinkArt slug={WHISKEY_SLUG} name={name} />
+      <DrinkArt slug={slugForMenu(entry.menu)} name={name} />
       <div className={styles.drinkHead}>
         <h3>{name}</h3>
         <span className={styles.drinkHeadChips}>
-          {entry.profile.abv ? (
-            <span className={styles.tagBadge}>{entry.profile.abv}%</span>
-          ) : null}
+          {profile?.abv ? <span className={styles.tagBadge}>{profile.abv}%</span> : null}
           {rarity && <span className={styles.whiskeyRarity}>{rarity}</span>}
         </span>
       </div>
@@ -644,109 +685,126 @@ function WhiskeyCard({
   );
 }
 
-function WhiskeySheet({
+function BottleDetails({
+  entry,
+  traits,
+}: {
+  entry: PourEntry;
+  traits: string[];
+}) {
+  const profile = entry.profile;
+  if (!profile) return null;
+  const { abv, region, story, notes, profile: meters, us, style } = profile;
+  const traitList = traits.length > 0 ? traits : WHISKEY_TRAITS;
+  const hasMeters = meters && meters.length > 0;
+  return (
+    <>
+      {(abv || region || style) && (
+        <p className={styles.whiskeySheetMeta}>
+          {abv ? `${abv}% · ` : ""}
+          {region ?? style ?? ""}
+        </p>
+      )}
+      {story && <p className={styles.whiskeySheetStory}>{story}</p>}
+      {notes && (
+        <p className={styles.whiskeySheetNotes}>
+          <strong>Tasting notes:</strong> {notes}
+        </p>
+      )}
+      {hasMeters && (
+        <div className={styles.whiskeySheetMeters} aria-label="Flavor profile">
+          {traitList.map((trait, i) => {
+            const value = meters![i] ?? 0;
+            return (
+              <div key={trait} className={styles.whiskeySheetMeter}>
+                <span className={styles.whiskeySheetMeterLabel}>{trait}</span>
+                <span
+                  className={styles.whiskeySheetMeterPips}
+                  role="img"
+                  aria-label={`${trait}: ${value} out of 5`}
+                >
+                  {[0, 1, 2, 3, 4].map((n) => (
+                    <i
+                      key={n}
+                      className={n < value ? styles.whiskeySheetPipOn : styles.whiskeySheetPip}
+                    />
+                  ))}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {us && <span className={styles.whiskeySheetUs}>{us}</span>}
+    </>
+  );
+}
+
+function PourSheet({
   entry,
   onCancel,
   onOrder,
 }: {
-  entry: WhiskeyEntry;
+  entry: PourEntry;
   onCancel: () => void;
-  onOrder: (size: number, serve: "neat" | "rocks") => void;
+  onOrder: (size: PourSize, serve: PourServe) => void;
 }) {
-  const [size, setSize] = useState<number>(WHISKEY_SIZE_TASTE_OZ);
-  const [serve, setServe] = useState<"neat" | "rocks">("neat");
+  const { menu } = entry;
+  const sizes = menu.sizes;
+  const serves = menu.serves;
+  const [size, setSize] = useState<PourSize>(defaultSize(menu) ?? sizes[0]);
+  const [serve, setServe] = useState<PourServe>(serves[0]);
   const name = titleCase(entry.ingredient);
-  const { abv, region, story, notes, profile, us, style } = entry.profile;
-  const hasMeters = profile && profile.length > 0;
+  const traits = menu.traits ?? [];
+
+  const canOrder = !!size && !!serve;
 
   return (
     <div className={styles.scrim} onClick={onCancel}>
       <div className={`${styles.sheet} ${styles.sheetWide}`} onClick={(e) => e.stopPropagation()}>
         <div className={styles.sheetArt}>
-          <DrinkArt slug={WHISKEY_SLUG} name={name} large />
+          <DrinkArt slug={slugForMenu(menu)} name={name} large />
         </div>
         <h3>{name}</h3>
-        {(abv || region || style) && (
-          <p className={styles.whiskeySheetMeta}>
-            {abv ? `${abv}% · ` : ""}
-            {region ?? style ?? ""}
-          </p>
-        )}
-        {story && <p className={styles.whiskeySheetStory}>{story}</p>}
-        {notes && (
-          <p className={styles.whiskeySheetNotes}>
-            <strong>Tasting notes:</strong> {notes}
-          </p>
-        )}
-        {hasMeters && (
-          <div className={styles.whiskeySheetMeters} aria-label="Flavor profile">
-            {WHISKEY_TRAITS.map((trait, i) => {
-              const value = profile![i] ?? 0;
-              return (
-                <div key={trait} className={styles.whiskeySheetMeter}>
-                  <span className={styles.whiskeySheetMeterLabel}>{trait}</span>
-                  <span
-                    className={styles.whiskeySheetMeterPips}
-                    role="img"
-                    aria-label={`${trait}: ${value} out of 5`}
-                  >
-                    {[0, 1, 2, 3, 4].map((n) => (
-                      <i
-                        key={n}
-                        className={n < value ? styles.whiskeySheetPipOn : styles.whiskeySheetPip}
-                      />
-                    ))}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {us && <span className={styles.whiskeySheetUs}>{us}</span>}
+        <BottleDetails entry={entry} traits={traits} />
 
-        <div>
-          <span className={styles.whiskeySegLabel} id="lbl-size">Size</span>
-          <div className={styles.whiskeySeg} role="group" aria-labelledby="lbl-size">
-            <button
-              type="button"
-              className={size === WHISKEY_SIZE_TASTE_OZ ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
-              onClick={() => setSize(WHISKEY_SIZE_TASTE_OZ)}
-              aria-pressed={size === WHISKEY_SIZE_TASTE_OZ}
-            >
-              Taste, {WHISKEY_SIZE_TASTE_OZ} oz
-            </button>
-            <button
-              type="button"
-              className={size === WHISKEY_SIZE_POUR_OZ ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
-              onClick={() => setSize(WHISKEY_SIZE_POUR_OZ)}
-              aria-pressed={size === WHISKEY_SIZE_POUR_OZ}
-            >
-              Pour, {WHISKEY_SIZE_POUR_OZ} oz
-            </button>
+        {sizes.length > 0 && (
+          <div>
+            <span className={styles.whiskeySegLabel} id="lbl-size">Size</span>
+            <div className={styles.whiskeySeg} role="group" aria-labelledby="lbl-size">
+              {sizes.map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  className={size?.label === s.label ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
+                  onClick={() => setSize(s)}
+                  aria-pressed={size?.label === s.label}
+                >
+                  {s.label}, {s.oz} oz
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div>
-          <span className={styles.whiskeySegLabel} id="lbl-serve">Serve it</span>
-          <div className={styles.whiskeySeg} role="group" aria-labelledby="lbl-serve">
-            <button
-              type="button"
-              className={serve === "neat" ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
-              onClick={() => setServe("neat")}
-              aria-pressed={serve === "neat"}
-            >
-              Neat
-            </button>
-            <button
-              type="button"
-              className={serve === "rocks" ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
-              onClick={() => setServe("rocks")}
-              aria-pressed={serve === "rocks"}
-            >
-              On the rocks
-            </button>
+        {serves.length >= 2 && (
+          <div>
+            <span className={styles.whiskeySegLabel} id="lbl-serve">Serve it</span>
+            <div className={styles.whiskeySeg} role="group" aria-labelledby="lbl-serve">
+              {serves.map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  className={serve?.label === s.label ? `${styles.whiskeySegBtn} ${styles.whiskeySegBtnOn}` : styles.whiskeySegBtn}
+                  onClick={() => setServe(s)}
+                  aria-pressed={serve?.label === s.label}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className={styles.btns}>
           <button type="button" className={`${styles.btn} ${styles.btnBig}`} onClick={onCancel}>
@@ -755,7 +813,8 @@ function WhiskeySheet({
           <button
             type="button"
             className={`${styles.btn} ${styles.btnBig} ${styles.btnMain}`}
-            onClick={() => onOrder(size, serve)}
+            onClick={() => canOrder && onOrder(size, serve)}
+            disabled={!canOrder}
           >
             Order
           </button>
@@ -765,62 +824,26 @@ function WhiskeySheet({
   );
 }
 
-function WhiskeyPreviewSheet({
+function PourPreviewSheet({
   entry,
   onClose,
 }: {
-  entry: WhiskeyEntry;
+  entry: PourEntry;
   onClose: () => void;
 }) {
   const name = titleCase(entry.ingredient);
-  const { abv, region, story, notes, profile, us, style } = entry.profile;
-  const hasMeters = profile && profile.length > 0;
-
+  const traits = entry.menu.traits ?? [];
   return (
     <div className={styles.scrim} onClick={onClose}>
       <div className={`${styles.sheet} ${styles.sheetWide}`} onClick={(e) => e.stopPropagation()}>
         <div className={styles.sheetArt}>
-          <DrinkArt slug={WHISKEY_SLUG} name={name} large />
+          <DrinkArt slug={slugForMenu(entry.menu)} name={name} large />
         </div>
         <h3>{name}</h3>
-        <p className={styles.whiskeyPreviewTag}>Coming soon · tap when it&rsquo;s on the bar</p>
-        {(abv || region || style) && (
-          <p className={styles.whiskeySheetMeta}>
-            {abv ? `${abv}% · ` : ""}
-            {region ?? style ?? ""}
-          </p>
-        )}
-        {story && <p className={styles.whiskeySheetStory}>{story}</p>}
-        {notes && (
-          <p className={styles.whiskeySheetNotes}>
-            <strong>Tasting notes:</strong> {notes}
-          </p>
-        )}
-        {hasMeters && (
-          <div className={styles.whiskeySheetMeters} aria-label="Flavor profile">
-            {WHISKEY_TRAITS.map((trait, i) => {
-              const value = profile![i] ?? 0;
-              return (
-                <div key={trait} className={styles.whiskeySheetMeter}>
-                  <span className={styles.whiskeySheetMeterLabel}>{trait}</span>
-                  <span
-                    className={styles.whiskeySheetMeterPips}
-                    role="img"
-                    aria-label={`${trait}: ${value} out of 5`}
-                  >
-                    {[0, 1, 2, 3, 4].map((n) => (
-                      <i
-                        key={n}
-                        className={n < value ? styles.whiskeySheetPipOn : styles.whiskeySheetPip}
-                      />
-                    ))}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {us && <span className={styles.whiskeySheetUs}>{us}</span>}
+        <p className={styles.whiskeyPreviewTag}>
+          Coming soon · tap when it&rsquo;s on the {entry.menu.name.toLowerCase()}
+        </p>
+        <BottleDetails entry={entry} traits={traits} />
         <div className={styles.btns}>
           <button type="button" className={`${styles.btn} ${styles.btnBig}`} onClick={onClose}>
             Close
