@@ -55,6 +55,14 @@ func (q *Queue) SetStep(step string) {
 	}
 }
 
+func (q *Queue) Clear() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	n := len(q.pending)
+	q.pending = nil
+	return n
+}
+
 func (q *Queue) Complete() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
