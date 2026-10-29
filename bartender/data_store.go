@@ -69,6 +69,32 @@ type IngredientStock struct {
 	InStock bool `json:"in_stock"`
 }
 
+type PourMenu struct {
+	ID           string      `json:"id"`
+	Name         string      `json:"name"`
+	Category     string      `json:"category"`
+	Intro        string      `json:"intro,omitempty"`
+	OnMenu       bool        `json:"on_menu,omitempty"`
+	Illustration string      `json:"illustration,omitempty"`
+	Sizes        []PourSize  `json:"sizes"`
+	DefaultSize  string      `json:"default_size,omitempty"`
+	Serves       []PourServe `json:"serves"`
+	Traits       []string    `json:"traits,omitempty"`
+	SortOrder    int         `json:"sort_order,omitempty"`
+}
+
+type PourSize struct {
+	Label string  `json:"label"`
+	Oz    float64 `json:"oz"`
+}
+
+type PourServe struct {
+	Label     string `json:"label"`
+	Glass     string `json:"glass,omitempty"`
+	WithIce   bool   `json:"with_ice,omitempty"`
+	StaffStep string `json:"staff_step,omitempty"`
+}
+
 type WhiskeyProfile struct {
 	ABV     float64 `json:"abv,omitempty"`
 	Region  string  `json:"region,omitempty"`
@@ -86,6 +112,7 @@ const (
 	pourerOzFileName        = "pourer_oz.json"
 	categoriesFileName      = "categories.json"
 	whiskeyProfilesFileName = "whiskey_profiles.json"
+	pourMenusFileName       = "pour_menus.json"
 )
 
 var errDataStoreNotConfigured = errors.New("data_dir not configured; recipes and inventory DoCommands unavailable")
@@ -99,6 +126,7 @@ type dataStore struct {
 	pourerOz        map[string]float64
 	categories      map[string]string
 	whiskeyProfiles map[string]WhiskeyProfile
+	pourMenus       []PourMenu
 }
 
 func newDataStore(dir string) (*dataStore, error) {
@@ -132,6 +160,9 @@ func newDataStore(dir string) (*dataStore, error) {
 		return nil, err
 	}
 	if err := ds.loadWhiskeyProfiles(); err != nil {
+		return nil, err
+	}
+	if err := ds.loadPourMenus(); err != nil {
 		return nil, err
 	}
 	return ds, nil
@@ -487,6 +518,77 @@ func (ds *dataStore) persistWhiskeyProfilesLocked() error {
 		return fmt.Errorf("marshal whiskey_profiles: %w", err)
 	}
 	path := filepath.Join(ds.dir, whiskeyProfilesFileName)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", tmp, path, err)
+	}
+	return nil
+}
+
+func defaultWhiskeyBarMenu() PourMenu {
+	return PourMenu{
+		ID:       "whiskey-bar",
+		Name:     "Whiskey bar",
+		Category: "Whiskey",
+		OnMenu:   true,
+		Sizes: []PourSize{
+			{Label: "Taste", Oz: 1},
+			{Label: "Pour", Oz: 2},
+		},
+		DefaultSize: "Taste",
+		Serves: []PourServe{
+			{Label: "Neat", Glass: "rocks"},
+			{Label: "On the rocks", Glass: "rocks", WithIce: true},
+		},
+		Traits: []string{"Peat", "Smoke", "Smoothness", "Sweetness", "Fruitiness", "Heat", "Body"},
+	}
+}
+
+func (ds *dataStore) loadPourMenus() error {
+	path := filepath.Join(ds.dir, pourMenusFileName)
+	bytes, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		ds.pourMenus = []PourMenu{defaultWhiskeyBarMenu()}
+		return ds.persistPourMenusLocked()
+	}
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	var menus []PourMenu
+	if err := json.Unmarshal(bytes, &menus); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	ds.pourMenus = menus
+	return nil
+}
+
+func (ds *dataStore) PourMenus() []PourMenu {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+	out := make([]PourMenu, len(ds.pourMenus))
+	copy(out, ds.pourMenus)
+	return out
+}
+
+func (ds *dataStore) UpdatePourMenus(menus []PourMenu) error {
+	if menus == nil {
+		menus = []PourMenu{}
+	}
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	ds.pourMenus = menus
+	return ds.persistPourMenusLocked()
+}
+
+func (ds *dataStore) persistPourMenusLocked() error {
+	bytes, err := json.MarshalIndent(ds.pourMenus, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal pour_menus: %w", err)
+	}
+	path := filepath.Join(ds.dir, pourMenusFileName)
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, bytes, 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", tmp, err)
