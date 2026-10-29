@@ -1057,7 +1057,8 @@ func (b *bartender) handleMakeCocktail(_ context.Context, raw any) (map[string]a
 	}
 	b.status.begin(displayName)
 	start := time.Now()
-	runCtx := ctxWithOrderID(context.Background(), "manual-"+start.UTC().Format("20060102_150405"))
+	orderID := "manual-" + start.UTC().Format("20060102_150405")
+	runCtx := ctxWithOrderID(context.Background(), orderID)
 	runCtx, done := b.withCancel(runCtx)
 
 	go func() {
@@ -1076,6 +1077,7 @@ func (b *bartender) handleMakeCocktail(_ context.Context, raw any) (map[string]a
 		b.status.finish(runErr)
 		alert := orderAlert{
 			drink:             displayName,
+			orderID:           orderID,
 			phase:             phase,
 			duration:          time.Since(start),
 			err:               runErr,
