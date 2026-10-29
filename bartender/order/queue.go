@@ -55,6 +55,17 @@ func (q *Queue) SetStep(step string) {
 	}
 }
 
+// Clear drops every pending order. The in-flight order (if any) keeps running
+// until its context is cancelled and the processQueue loop calls Complete; use
+// this together with cancellation when the operator wants a fresh slate.
+func (q *Queue) Clear() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	n := len(q.pending)
+	q.pending = nil
+	return n
+}
+
 func (q *Queue) Complete() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
