@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/viam-labs/cocktail-bot/bartender/filesaver"
 	"go.uber.org/zap/zaptest/observer"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/testutils/inject"
@@ -140,41 +141,32 @@ func TestMixerPowerFailureWarnsAndContinues(t *testing.T) {
 	test.That(t, logs.FilterMessageSnippet(`mixer power "mixer-power"`).Len(), test.ShouldEqual, 2)
 }
 
-func TestMixerPowerSwitchMissingWarns(t *testing.T) {
-	url, texts := slackRecorder(t)
-	b, logs := newMixerPowerBartender(t, "mixer-power", nil, url)
-
-	b.startMixer(context.Background())()
-
-	test.That(t, nextSlack(t, texts), test.ShouldContainSubstring, errMixerPowerUnavailable.Error())
-	test.That(t, nextSlack(t, texts), test.ShouldContainSubstring, "turn the mixer off")
-	test.That(t, logs.FilterMessageSnippet(errMixerPowerUnavailable.Error()).Len(), test.ShouldEqual, 2)
-}
-
 func TestMixerPowerWarningEscapesSlackMarkup(t *testing.T) {
 	got := mixerPowerWarning(true, "<!channel>", errors.New("<b>"))
 	test.That(t, got, test.ShouldNotContainSubstring, "<")
 }
 
-func TestPowerOffMixerOnClose(t *testing.T) {
+func TestCloseCancelsRunningOrderThenPowersOffMixer(t *testing.T) {
 	sw := newRecordingSwitch(nil)
 	b, _ := newMixerPowerBartender(t, "mixer-power", sw, "")
+	b.queueStop = make(chan struct{})
+	b.filesaver = filesaver.New("", b.logger)
+	orderCtx, done := b.withCancel(context.Background())
+	defer done()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	b.powerOffMixerOnClose(ctx)
+	test.That(t, b.Close(ctx), test.ShouldBeNil)
 
+	test.That(t, orderCtx.Err(), test.ShouldNotBeNil)
 	test.That(t, sw.calls(), test.ShouldResemble, []uint32{0})
 	test.That(t, sw.ctxErrs[0], test.ShouldBeNil)
-
-	unconfigured, _ := newMixerPowerBartender(t, "", nil, "")
-	unconfigured.powerOffMixerOnClose(ctx)
 }
 
-func TestConfigValidateMixerPowerSwitchIsOptionalDep(t *testing.T) {
+func TestConfigValidateMixerPowerSwitchIsRequiredDep(t *testing.T) {
 	cfg := &Config{ArmName: "arm", GripperName: "gripper", PoseSwitcherNames: []string{"mixer"}, MixerPowerSwitchName: "mixer-power"}
 	deps, optional, err := cfg.Validate("svc")
 	test.That(t, err, test.ShouldBeNil)
-	test.That(t, deps, test.ShouldNotContain, "rdk:component:switch/mixer-power")
-	test.That(t, optional, test.ShouldContain, "rdk:component:switch/mixer-power")
+	test.That(t, deps, test.ShouldContain, "rdk:component:switch/mixer-power")
+	test.That(t, optional, test.ShouldNotContain, "rdk:component:switch/mixer-power")
 }

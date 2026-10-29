@@ -153,11 +153,9 @@ func newBartender(ctx context.Context, deps resource.Dependencies, conf resource
 	if cfg.MixerPowerSwitchName != "" {
 		sw, err := toggleswitch.FromProvider(deps, cfg.MixerPowerSwitchName)
 		if err != nil {
-			logger.Warnf("mixer power switch %q not available: %v; mixes will warn and the mixer must be switched by hand until a reconfigure attaches it",
-				cfg.MixerPowerSwitchName, err)
-		} else {
-			b.mixerPower = sw
+			return nil, fmt.Errorf("mixer power switch %q: %w", cfg.MixerPowerSwitchName, err)
 		}
+		b.mixerPower = sw
 	}
 
 	if dir := cfg.dataDir(); dir != "" {
@@ -175,7 +173,10 @@ func newBartender(ctx context.Context, deps resource.Dependencies, conf resource
 }
 
 func (b *bartender) Close(ctx context.Context) error {
+	b.cancelRunning()
 	close(b.queueStop)
-	b.powerOffMixerOnClose(ctx)
+	if err := b.setMixerPower(ctx, false); err != nil {
+		b.logger.Warnf("power off mixer %q on close: %v", b.cfg.MixerPowerSwitchName, err)
+	}
 	return b.filesaver.Close()
 }

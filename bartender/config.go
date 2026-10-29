@@ -141,6 +141,9 @@ func (c *Config) Validate(path string) ([]string, []string, error) {
 		}
 		deps = append(deps, toggleswitch.Named(name).String())
 	}
+	if c.MixerPowerSwitchName != "" {
+		deps = append(deps, toggleswitch.Named(c.MixerPowerSwitchName).String())
+	}
 
 	var optional []string
 	if c.OrderSensorName != "" {
@@ -148,9 +151,6 @@ func (c *Config) Validate(path string) ([]string, []string, error) {
 	}
 	if c.GlassFinderName != "" {
 		optional = append(optional, vision.Named(c.GlassFinderName).String())
-	}
-	if c.MixerPowerSwitchName != "" {
-		optional = append(optional, toggleswitch.Named(c.MixerPowerSwitchName).String())
 	}
 	return deps, optional, nil
 }
