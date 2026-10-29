@@ -109,6 +109,47 @@ func TestGetInventoryReturnsCopy(t *testing.T) {
 	test.That(t, fresh.Ingredients["vodka"].InStock, test.ShouldBeTrue)
 }
 
+func TestPourMenusSeededOnFreshDir(t *testing.T) {
+	dir := t.TempDir()
+	ds, err := newDataStore(dir)
+	test.That(t, err, test.ShouldBeNil)
+	menus := ds.PourMenus()
+	test.That(t, len(menus), test.ShouldEqual, 1)
+	test.That(t, menus[0].ID, test.ShouldEqual, "whiskey-bar")
+	test.That(t, menus[0].Category, test.ShouldEqual, "Whiskey")
+
+	ds2, err := newDataStore(dir)
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, len(ds2.PourMenus()), test.ShouldEqual, 1)
+}
+
+func TestUpdatePourMenusPersistsToDisk(t *testing.T) {
+	dir := t.TempDir()
+	ds, err := newDataStore(dir)
+	test.That(t, err, test.ShouldBeNil)
+
+	err = ds.UpdatePourMenus([]PourMenu{
+		{
+			ID:       "wine",
+			Name:     "Wine",
+			Category: "Wine",
+			OnMenu:   true,
+			Sizes:    []PourSize{{Label: "Taste", Oz: 2}, {Label: "Glass", Oz: 5}},
+			Serves:   []PourServe{{Label: "Serve", Glass: "stemless"}},
+			Traits:   []string{"Body", "Sweetness", "Acidity", "Tannin", "Fruit"},
+		},
+	})
+	test.That(t, err, test.ShouldBeNil)
+
+	ds2, err := newDataStore(dir)
+	test.That(t, err, test.ShouldBeNil)
+	menus := ds2.PourMenus()
+	test.That(t, len(menus), test.ShouldEqual, 1)
+	test.That(t, menus[0].ID, test.ShouldEqual, "wine")
+	test.That(t, len(menus[0].Sizes), test.ShouldEqual, 2)
+	test.That(t, menus[0].Serves[0].Glass, test.ShouldEqual, "stemless")
+}
+
 func TestDataDirFallsBackToModuleEnv(t *testing.T) {
 	t.Setenv("VIAM_MODULE_DATA", "/env/dir")
 
