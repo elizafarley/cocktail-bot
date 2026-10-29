@@ -38,11 +38,15 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 	// pour goes straight into the serving glass. Otherwise all pours fill the
 	// shaker and the shaker gets served at the end.
 	usesShaker := false
+	mixed := false
 	strained := false
 	for _, s := range steps {
 		switch s.Kind {
 		case "ice", "mix", "strain":
 			usesShaker = true
+		}
+		if s.Kind == "mix" {
+			mixed = true
 		}
 		if s.Kind == "strain" {
 			strained = true
@@ -104,10 +108,12 @@ func (b *bartender) makeCocktail(ctx context.Context, drinkID string, recipe *Re
 	}
 
 	if usesShaker {
-		// strain leaves shaker-A held and ready to pour; without a strain
-		// step the shaker is sitting at shaker-home with the ice (and
-		// whatever got poured in), so pick it up before serving.
-		if !strained {
+		// strain leaves shaker-A held and mix ends still holding the shaker
+		// above the mixer, so in both cases pourFromShaker gets a shaker
+		// already in the gripper. Only when neither ran is the shaker still
+		// sitting at shaker-home with contents, and only then do we go pick
+		// it up before serving.
+		if !mixed && !strained {
 			shakerSw, err := b.findSwitch(d.ShakerSource)
 			if err != nil {
 				return fmt.Errorf("shaker source switch %q: %w", d.ShakerSource, err)
